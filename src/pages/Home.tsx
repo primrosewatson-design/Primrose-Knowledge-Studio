@@ -52,7 +52,7 @@ export default function Home() {
   return (
     <div className="overflow-hidden">
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-royal-600 to-royal-900 px-4 py-24 text-center text-white md:py-32">
+      <section className="relative bg-gradient-to-br from-gradient-indigo to-gradient-violet px-4 py-24 text-center text-white md:py-32">
         {/* Animated background elements */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-10 left-5 h-32 w-32 rounded-full bg-white/5 blur-3xl"></div>
@@ -119,12 +119,12 @@ export default function Home() {
               onMouseLeave={() => setHoveredFeature(null)}
               className={`group rounded-xl p-8 transition-all duration-300 ${feature.color} ${
                 hoveredFeature === feature.to
-                  ? 'scale-105 shadow-xl ring-2 ring-royal-500'
+                  ? 'scale-105 shadow-xl ring-2 ring-gradient-coral'
                   : 'shadow-md hover:shadow-lg'
               }`}
             >
               {/* Step Number */}
-              <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-royal-600 text-white font-bold">
+              <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-violet text-white font-bold">
                 {idx + 1}
               </div>
 
@@ -134,7 +134,7 @@ export default function Home() {
               </div>
 
               {/* Title */}
-              <h3 className="mb-3 text-xl font-bold text-gray-900 group-hover:text-royal-700 transition-colors">
+              <h3 className="mb-3 text-xl font-bold text-gray-900 group-hover:text-gradient-violet transition-colors">
                 {feature.title}
               </h3>
 
@@ -142,7 +142,7 @@ export default function Home() {
               <p className="mb-4 text-gray-700">{feature.description}</p>
 
               {/* Arrow indicator */}
-              <div className="inline-flex items-center gap-2 font-semibold text-royal-600 transition-transform group-hover:translate-x-2">
+              <div className="inline-flex items-center gap-2 font-semibold text-gradient-coral transition-transform group-hover:translate-x-2">
                 Explore <span>→</span>
               </div>
             </Link>
@@ -194,7 +194,7 @@ export default function Home() {
 
       {/* CTA Section */}
       <section className="mx-auto max-w-4xl px-4 py-16">
-        <div className="rounded-xl bg-gradient-to-r from-royal-700 to-royal-950 p-12 text-center text-white">
+        <div className="rounded-xl bg-gradient-to-r from-gradient-coral to-gradient-amber p-12 text-center text-white">
           <h2 className="mb-4 text-3xl font-bold">Ready to Transform Your Learning?</h2>
           <p className="mb-8 text-lg text-royal-100">
             Start exploring our curated collection of expert videos today

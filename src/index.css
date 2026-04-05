@@ -13,6 +13,11 @@
   --color-royal-900: #1e3168;
   --color-royal-950: #121d3e;
 
+  --color-gradient-indigo: #4338ca;
+  --color-gradient-violet: #8b5cf6;
+  --color-gradient-coral: #f43f5e;
+  --color-gradient-amber: #f59e0b;
+
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
 
