@@ -13,16 +13,14 @@
   --color-royal-900: #1e3168;
   --color-royal-950: #121d3e;
 
-  --color-warm-50: #fdf8f6;
-  --color-warm-100: #f9eeea;
-  --color-warm-200: #f3ddd5;
-  --color-warm-300: #e8c4b8;
-  --color-warm-400: #d4a494;
-  --color-warm-500: #bc7c6a;
+  --color-gradient-indigo: #4338ca;
+  --color-gradient-violet: #8b5cf6;
+  --color-gradient-coral: #f43f5e;
+  --color-gradient-amber: #f59e0b;
 
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
 
 body {
-  @apply m-0 bg-warm-50 text-gray-800 antialiased;
+  @apply m-0 bg-white text-gray-900 antialiased;
 }
