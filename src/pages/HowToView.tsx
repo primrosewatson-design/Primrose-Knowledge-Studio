@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 export default function HowToView() {
   const [activeSection, setActiveSection] = useState<'select' | 'pay' | 'view'>('select')
@@ -160,12 +161,12 @@ export default function HowToView() {
       <div className="mt-16 rounded-lg bg-gradient-to-r from-royal-600 to-royal-700 p-8 text-center text-white">
         <h3 className="mb-4 text-2xl font-bold">Ready to Start Learning?</h3>
         <p className="mb-6 text-lg">Explore our video library and find the perfect courses for your learning goals.</p>
-        <a
-          href="/how-to-choose"
+        <Link
+          to="/how-to-choose"
           className="inline-block rounded-lg bg-white px-8 py-3 font-semibold text-royal-700 transition-transform hover:scale-105"
         >
           Browse Videos Now
-        </a>
+        </Link>
       </div>
     </div>
   )
