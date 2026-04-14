@@ -4,6 +4,7 @@ import Home from './pages/Home'
 import HowToView from './pages/HowToView'
 import HowToChoose from './pages/HowToChoose'
 import HowToGet from './pages/HowToGet'
+import About from './pages/About'
 
 export default function App() {
   return (
@@ -13,7 +14,8 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/how-to-view" element={<HowToView />} />
           <Route path="/how-to-choose" element={<HowToChoose />} />
-          <Route path="/how-to-get" element={<HowToGet />} />
+          <Route path="/how-to-pay" element={<HowToGet />} />
+          <Route path="/about" element={<About />} />
         </Route>
       </Routes>
     </BrowserRouter>
