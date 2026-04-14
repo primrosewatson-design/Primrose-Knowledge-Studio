@@ -1,306 +1,212 @@
 # Video Creation Recommendations for Primrose Knowledge Studio
 
-## Current State
+## Chosen Approach: YouTube Unlisted + Supabase Management
 
-Primrose Knowledge Studio is a video-based educational marketplace built with React, TypeScript, Vite, Tailwind CSS, Supabase, and Stripe. Currently, video content is consumed through embedded YouTube iframes with mock data. There are no in-platform video creation or upload tools.
-
-This document recommends how to add video creation capabilities directly inside the platform.
+Videos will be created and uploaded to YouTube as **unlisted** links, then managed through the platform via Supabase. This keeps video hosting free, leverages YouTube's transcoding and adaptive streaming, and builds on the existing YouTube iframe player already in the codebase.
 
 ---
 
-## Recommendation Overview
+## How It Works
 
-Three tiers are proposed, each building on the previous. Start with Tier 1 for immediate value, then layer on Tiers 2 and 3 as the platform grows.
+```
+1. Record/edit video externally (phone, screen recorder, etc.)
+           |
+           v
+2. Upload to YouTube as "Unlisted"
+           |
+           v
+3. Copy the YouTube URL + thumbnail
+           |
+           v
+4. Add video to the platform via Creator Dashboard
+   (title, description, categories, price, YouTube URL)
+           |
+           v
+5. Supabase stores the metadata in a `videos` table
+           |
+           v
+6. VideoGallery queries Supabase and displays to learners
+           |
+           v
+7. Playback via YouTube iframe (existing implementation)
+```
 
-| Tier | Capability | Effort | Value |
-|------|-----------|--------|-------|
-| **1 - Upload & Manage** | Upload videos, auto-generate thumbnails, manage metadata | Medium | High |
-| **2 - In-Browser Recording** | Record screen, webcam, or both directly in the browser | Medium | High |
-| **3 - In-Platform Editing** | Trim, splice, add text overlays, transitions | High | Medium |
+### Why Unlisted YouTube
+
+- **Free hosting** -- no storage or bandwidth costs.
+- **Automatic transcoding** -- YouTube handles all video quality levels.
+- **Adaptive streaming** -- viewers get the best quality for their connection.
+- **No infrastructure** -- no need for Supabase Storage buckets, Edge Functions for transcoding, or signed URLs.
+- **Already works** -- the platform's `VideoGallery.tsx` already uses YouTube iframes.
+- **Access control** -- unlisted videos are not searchable on YouTube; only people with the link (i.e., through your platform) can find them.
 
 ---
 
-## Tier 1: Video Upload & Management
+## What to Build
 
-### What It Adds
-A creator dashboard where Primrose (and future creators) can upload video files, set metadata (title, description, categories, price), auto-generate thumbnails, and publish to the gallery.
+### 1. Database Schema (Supabase/PostgreSQL)
 
-### Recommended Architecture
+Replace mock data with a real `videos` table:
 
-**Storage: Supabase Storage**
-- The platform already uses Supabase. Supabase Storage supports large file uploads (up to 5 GB per file) with resumable uploads via the TUS protocol.
-- Create a `videos` bucket for raw uploads and a `thumbnails` bucket for generated/uploaded thumbnail images.
-- Use Supabase Row Level Security (RLS) policies to restrict uploads to authenticated creators.
-
-**Database Schema (Supabase/PostgreSQL)**
 ```sql
--- Replace mock data with a real videos table
 create table videos (
   id uuid default gen_random_uuid() primary key,
-  creator_id uuid references auth.users(id),
   title text not null,
   description text,
   categories text[] default '{}',
-  duration_seconds integer,
-  video_path text not null,          -- Supabase Storage path
-  thumbnail_path text,               -- Supabase Storage path
-  status text default 'processing',  -- processing | ready | failed
+  duration text,                      -- e.g. "12:45"
+  youtube_url text not null,          -- YouTube embed URL (unlisted)
+  thumbnail_url text not null,        -- YouTube thumbnail or custom URL
   price_cents integer default 0,
   view_limit integer default 5,
+  is_published boolean default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
 
--- Track per-user view counts
+-- Track per-user view counts (for the 5-view limit)
 create table video_views (
   id uuid default gen_random_uuid() primary key,
-  video_id uuid references videos(id),
-  user_id uuid references auth.users(id),
+  video_id uuid references videos(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade,
   view_count integer default 0,
   last_viewed_at timestamptz default now(),
   unique(video_id, user_id)
 );
 ```
 
-**Video Processing: Supabase Edge Functions + FFmpeg (WASM)**
-- On upload, trigger a Supabase Edge Function that:
-  1. Extracts video duration using FFmpeg WASM or a lightweight probe.
-  2. Generates a thumbnail at the 25% mark.
-  3. Optionally transcodes to HLS (HTTP Live Streaming) for adaptive bitrate playback.
-  4. Updates the `videos` row with `status = 'ready'`.
+### 2. Creator Dashboard
 
-**Playback: Replace YouTube iframes**
-- Serve videos directly from Supabase Storage signed URLs (time-limited for security).
-- Use an HTML5 `<video>` element or a lightweight player like **Plyr** or **Video.js** for consistent controls and mobile support.
-- Enforce the 5-view limit by checking `video_views` before generating a signed URL.
-
-### Key Components to Build
+A simple admin page to add and manage videos:
 
 ```
 src/
   pages/
-    CreatorDashboard.tsx    -- Upload form, video list, analytics
+    CreatorDashboard.tsx    -- Add/edit/delete videos, toggle publish status
   components/
-    VideoUploader.tsx       -- Drag-and-drop upload with progress bar
-    VideoPlayer.tsx         -- Custom player replacing YouTube iframes
-    VideoMetadataForm.tsx   -- Title, description, categories, price
+    VideoMetadataForm.tsx   -- Form: title, description, YouTube URL, categories, price
 ```
 
-### Integration Points
-- **App.tsx**: Add route `/creator` for the dashboard (protected by auth).
-- **VideoGallery.tsx**: Replace `MOCK_VIDEOS` with a Supabase query to the `videos` table.
-- **Supabase Auth**: Add authentication (email/password or magic link) to gate creator access.
+**The form collects:**
+- Title
+- Description
+- YouTube embed URL (paste the unlisted link, auto-convert to embed format)
+- Thumbnail URL (auto-extract from YouTube or upload custom)
+- Categories (multi-select)
+- Duration
+- Price
+- Published status (draft/live)
 
----
-
-## Tier 2: In-Browser Video Recording
-
-### What It Adds
-A "Record" button in the creator dashboard that captures screen, webcam, or both -- no external software needed.
-
-### Recommended Approach
-
-**Browser APIs: MediaRecorder + getDisplayMedia**
-- `navigator.mediaDevices.getDisplayMedia()` for screen capture.
-- `navigator.mediaDevices.getUserMedia()` for webcam/microphone.
-- `MediaRecorder` API to encode the stream as WebM (VP9 + Opus).
-- These are supported in all modern browsers (Chrome, Firefox, Edge, Safari 14.1+).
-
-**Recording Modes**
-1. **Screen only** -- ideal for software tutorials.
-2. **Webcam only** -- ideal for talking-head explainers.
-3. **Screen + webcam overlay** -- picture-in-picture style, achieved by compositing both streams onto an OffscreenCanvas.
-
-**Implementation Sketch**
-
-```tsx
-// Core recording hook
-function useVideoRecorder() {
-  const [recording, setRecording] = useState(false)
-  const [blob, setBlob] = useState<Blob | null>(null)
-  const mediaRecorder = useRef<MediaRecorder | null>(null)
-
-  async function startRecording(mode: 'screen' | 'webcam' | 'both') {
-    const streams: MediaStream[] = []
-
-    if (mode === 'screen' || mode === 'both') {
-      streams.push(await navigator.mediaDevices.getDisplayMedia({
-        video: { width: 1920, height: 1080 },
-        audio: true
-      }))
-    }
-    if (mode === 'webcam' || mode === 'both') {
-      streams.push(await navigator.mediaDevices.getUserMedia({
-        video: true, audio: true
-      }))
-    }
-
-    // Combine streams if needed, then record
-    const combined = combineStreams(streams)
-    const recorder = new MediaRecorder(combined, {
-      mimeType: 'video/webm;codecs=vp9,opus'
-    })
-
-    const chunks: Blob[] = []
-    recorder.ondataavailable = (e) => chunks.push(e.data)
-    recorder.onstop = () => setBlob(new Blob(chunks, { type: 'video/webm' }))
-
-    recorder.start()
-    mediaRecorder.current = recorder
-    setRecording(true)
-  }
-
-  function stopRecording() {
-    mediaRecorder.current?.stop()
-    setRecording(false)
-  }
-
-  return { recording, blob, startRecording, stopRecording }
+**Auto-extract YouTube thumbnail:**
+```ts
+// Given a YouTube URL, get the high-quality thumbnail
+function getYouTubeThumbnail(youtubeUrl: string): string | null {
+  const match = youtubeUrl.match(
+    /(?:youtube\.com\/(?:embed\/|watch\?v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+  )
+  if (!match) return null
+  return `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg`
 }
 ```
 
-**Post-Recording Flow**
-1. Preview the recording in the browser.
-2. If satisfied, upload directly via the Tier 1 upload pipeline.
-3. Supabase Edge Function handles transcoding from WebM to MP4/HLS.
+### 3. Replace Mock Data in VideoGallery
 
-### Key Components to Build
+Swap `MOCK_VIDEOS` for a live Supabase query:
 
+```ts
+import { supabase } from '../lib/supabase'
+
+const [videos, setVideos] = useState<Video[]>([])
+
+useEffect(() => {
+  async function fetchVideos() {
+    const { data } = await supabase
+      .from('videos')
+      .select('*')
+      .eq('is_published', true)
+      .order('created_at', { ascending: false })
+    if (data) setVideos(data)
+  }
+  fetchVideos()
+}, [])
 ```
-src/
-  components/
-    VideoRecorder.tsx        -- Recording UI with mode selection
-    RecordingPreview.tsx     -- Review before uploading
-  hooks/
-    useVideoRecorder.ts     -- MediaRecorder logic (above)
-    useStreamCompositor.ts  -- Combines screen + webcam streams
-```
 
----
+### 4. View Limit Enforcement
 
-## Tier 3: In-Platform Video Editing
+Before playing a video, check and increment the view count:
 
-### What It Adds
-A lightweight editor for trimming clips, adding text overlays, arranging segments on a timeline, and applying simple transitions.
+```ts
+async function canWatch(videoId: string, userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('video_views')
+    .select('view_count')
+    .eq('video_id', videoId)
+    .eq('user_id', userId)
+    .single()
 
-### Recommended Approach
+  if (!data) return true                    // First view
+  return data.view_count < 5               // Under the limit
+}
 
-**Option A: FFmpeg WASM (Recommended for MVP)**
-- Use `@ffmpeg/ffmpeg` to run FFmpeg directly in the browser via WebAssembly.
-- Supports trimming, concatenation, text overlays, fade transitions, and format conversion.
-- No server-side processing needed for basic edits.
-- Trade-off: Slower than native FFmpeg; works well for clips under 10 minutes.
-
-```tsx
-import { FFmpeg } from '@ffmpeg/ffmpeg'
-
-async function trimVideo(file: File, startSec: number, endSec: number) {
-  const ffmpeg = new FFmpeg()
-  await ffmpeg.load()
-  await ffmpeg.writeFile('input.webm', await fetchFile(file))
-  await ffmpeg.exec([
-    '-i', 'input.webm',
-    '-ss', String(startSec),
-    '-to', String(endSec),
-    '-c', 'copy',
-    'output.mp4'
-  ])
-  const data = await ffmpeg.readFile('output.mp4')
-  return new Blob([data], { type: 'video/mp4' })
+async function recordView(videoId: string, userId: string) {
+  await supabase.rpc('increment_view_count', {
+    p_video_id: videoId,
+    p_user_id: userId
+  })
 }
 ```
 
-**Option B: Canvas-Based Timeline Editor (For Richer UX)**
-- Render video frames to a `<canvas>` element for a visual timeline.
-- Libraries like **Remotion** (React-native video composition) can generate videos programmatically from React components -- ideal for adding animated text, logos, and transitions.
-- Trade-off: Higher complexity, but produces a polished creator experience.
+### 5. Supabase Auth (Creator Login)
 
-**Editing Features (Priority Order)**
-1. **Trim/Cut** -- Set in/out points to remove unwanted sections.
-2. **Text Overlays** -- Add titles, captions, or annotations at specific timestamps.
-3. **Thumbnail Selection** -- Pick a frame from the video as the thumbnail.
-4. **Segment Reordering** -- Drag-and-drop timeline to rearrange clips.
-5. **Transitions** -- Simple crossfades between segments.
-6. **Audio Adjustments** -- Volume control, mute sections, add background music.
+Protect the dashboard so only you can add/edit videos:
 
-### Key Components to Build
-
-```
-src/
-  pages/
-    VideoEditor.tsx          -- Main editor page
-  components/
-    Timeline.tsx             -- Visual timeline with draggable segments
-    TrimControls.tsx         -- In/out point sliders
-    TextOverlayEditor.tsx    -- Add/position text on video
-    EditorPreview.tsx        -- Real-time preview of edits
-  lib/
-    ffmpeg.ts                -- FFmpeg WASM wrapper utilities
+```ts
+// Simple auth check for the creator dashboard
+const { data: { user } } = await supabase.auth.getUser()
+if (!user) redirect('/login')
 ```
 
 ---
 
-## Recommended Implementation Order
+## Implementation Order
 
-### Phase 1 (Weeks 1-3): Foundation
-1. Add Supabase Auth (email/password login for creators).
-2. Create the `videos` and `video_views` database tables.
-3. Build the `VideoUploader` component with Supabase Storage resumable uploads.
-4. Replace YouTube iframes with a custom `VideoPlayer` using signed URLs.
-5. Replace `MOCK_VIDEOS` with live Supabase queries.
-
-### Phase 2 (Weeks 4-5): Creator Dashboard
-1. Build the `CreatorDashboard` page with video management (list, edit, delete).
-2. Add auto-thumbnail generation via Supabase Edge Function.
-3. Add the `/creator` route (auth-protected).
-4. Implement the 5-view-limit enforcement with `video_views`.
-
-### Phase 3 (Weeks 6-7): In-Browser Recording
-1. Build `useVideoRecorder` hook with screen/webcam/both modes.
-2. Build `VideoRecorder` UI integrated into the creator dashboard.
-3. Add recording preview and direct-to-upload flow.
-
-### Phase 4 (Weeks 8-10): Basic Editing
-1. Integrate `@ffmpeg/ffmpeg` WASM.
-2. Build trim/cut functionality.
-3. Add text overlay editor.
-4. Add thumbnail frame selection.
+| Step | What | Details |
+|------|------|---------|
+| **1** | Create `videos` table in Supabase | Run the SQL schema above in the Supabase SQL editor |
+| **2** | Replace `MOCK_VIDEOS` | Query Supabase in `VideoGallery.tsx` instead of using hardcoded data |
+| **3** | Build Creator Dashboard | Form to add videos by pasting YouTube unlisted URLs + metadata |
+| **4** | Add Supabase Auth | Email/password login for the creator dashboard |
+| **5** | Add view tracking | `video_views` table + check before playback |
+| **6** | Add RLS policies | Restrict who can insert/update/read videos |
 
 ---
 
-## Technology Choices Summary
+## YouTube Tips for Unlisted Videos
 
-| Concern | Recommendation | Why |
-|---------|---------------|-----|
-| **Video Storage** | Supabase Storage | Already in the stack; supports large files and signed URLs |
-| **Video Processing** | Supabase Edge Functions + FFmpeg | Serverless, scales automatically |
-| **Recording** | MediaRecorder API | Native browser API, no dependencies |
-| **In-Browser Editing** | @ffmpeg/ffmpeg (WASM) | Runs client-side, no server costs for basic edits |
-| **Video Player** | Plyr or Video.js | Lightweight, customizable, mobile-friendly |
-| **Adaptive Streaming** | HLS via FFmpeg transcoding | Industry standard, works on all devices |
-| **Auth** | Supabase Auth | Already configured, supports RLS policies |
+- **Set visibility to "Unlisted"** when uploading -- the video won't appear in search or on your channel.
+- **Use YouTube Studio** for free trimming, cuts, and blur tools before publishing.
+- **Embed URL format**: Convert `https://www.youtube.com/watch?v=ABC123` to `https://www.youtube.com/embed/ABC123` for the iframe player.
+- **Thumbnails**: YouTube auto-generates 3 thumbnail options, or you can upload a custom one. Use `https://img.youtube.com/vi/VIDEO_ID/hqdefault.jpg` to reference it.
+- **No ads on unlisted**: Unlisted videos on channels without monetization won't show ads to your learners.
 
 ---
 
-## Cost Considerations
+## Cost
 
-- **Supabase Storage**: Free tier includes 1 GB storage, 2 GB bandwidth. Pro plan ($25/mo) includes 100 GB storage, 250 GB bandwidth. Sufficient for early growth.
-- **Supabase Edge Functions**: Free tier includes 500K invocations/month. More than enough for video processing triggers.
-- **Client-side recording/editing**: Zero server cost -- all processing happens in the user's browser.
-- **No third-party video APIs needed**: The entire pipeline uses Supabase + browser APIs, keeping costs minimal.
+- **YouTube**: Free (unlimited uploads, hosting, bandwidth, transcoding).
+- **Supabase**: Free tier covers the database and auth for this use case (500 MB database, 50K auth users).
+- **Total: $0/month** to start.
 
 ---
 
 ## Security Considerations
 
-- **Signed URLs**: All video playback URLs should be time-limited (e.g., 1 hour expiry) to prevent link sharing.
-- **RLS Policies**: Only authenticated creators can upload; only purchasers can view.
-- **File Validation**: Validate file types and sizes on both client and server to prevent abuse.
-- **Content-Type Headers**: Ensure proper MIME types are set on uploaded files.
-- **Rate Limiting**: Apply rate limits on upload endpoints to prevent abuse.
+- **Unlisted != private**: Anyone with the YouTube link can watch. The platform controls discovery, but the URLs themselves are not secret. For truly gated access, consider adding domain-restricted embedding in YouTube Studio.
+- **RLS policies**: Ensure only the creator can insert/update videos; learners can only read published videos.
+- **View limit**: Enforce server-side via Supabase RPC, not client-side, to prevent bypassing.
 
 ---
 
 ## Summary
 
-The platform's existing Supabase + React stack is well-suited for adding video creation capabilities without introducing new infrastructure. By layering upload/management (Tier 1), browser recording (Tier 2), and client-side editing (Tier 3), creators can produce and publish videos entirely within Primrose Knowledge Studio -- no external tools required.
+By using YouTube as the video host and Supabase as the metadata/access layer, you get a fully functional video platform with zero hosting costs. The creator workflow is: record a video, upload to YouTube as unlisted, paste the URL into the creator dashboard. The platform handles discovery, purchase flow, and view limits.
