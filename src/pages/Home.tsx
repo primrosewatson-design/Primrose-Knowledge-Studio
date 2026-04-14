@@ -17,16 +17,16 @@ const features = [
     color: 'bg-royal-50'
   },
   {
-    title: 'How to Get',
+    title: 'How to Pay',
     description: 'Purchase and access the knowledge you need.',
-    to: '/how-to-get',
+    to: '/how-to-pay',
     icon: '💳',
     color: 'bg-green-50'
   },
 ]
 
 const stats = [
-  { number: '50+', label: 'Expert Videos' },
+  { number: '50+', label: 'Videos' },
   { number: '5', label: 'Views Per Video' },
   { number: '100%', label: 'Satisfaction' },
 ]
@@ -71,7 +71,7 @@ export default function Home() {
           </h1>
 
           <p className="mx-auto mb-10 max-w-2xl text-lg text-royal-100">
-            Expert knowledge videos from Primrose Watson, crafted to help you understand, choose, and take action. Learn at your own pace, forever.
+            Knowledge videos from <Link to="/about" className="underline decoration-2 underline-offset-2 hover:text-white transition-colors">Primrose Watson</Link>, curated to help you understand and learn at your own pace.
           </p>
 
           <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
@@ -107,7 +107,7 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-4 py-16">
         <h2 className="mb-4 text-center text-3xl font-bold text-gray-900">Get Started in 3 Steps</h2>
         <p className="mx-auto mb-12 max-w-2xl text-center text-gray-600">
-          Our simple process makes it easy to find, purchase, and enjoy expert content
+          A simple process to find, purchase, and enjoy Primrose Watson's content
         </p>
 
         <div className="grid gap-8 md:grid-cols-3">
@@ -157,8 +157,8 @@ export default function Home() {
           <div className="flex gap-4 rounded-lg bg-blue-50 p-6">
             <span className="text-2xl">🎓</span>
             <div>
-              <h3 className="font-bold text-gray-900">Expert Content</h3>
-              <p className="text-sm text-gray-700">Carefully curated videos from industry experts</p>
+              <h3 className="font-bold text-gray-900">Curated Content</h3>
+              <p className="text-sm text-gray-700">Carefully curated videos from Primrose Watson</p>
             </div>
           </div>
           <div className="flex gap-4 rounded-lg bg-green-50 p-6">
@@ -180,7 +180,7 @@ export default function Home() {
 
       {/* Testimonials Section */}
       <section className="mx-auto max-w-6xl px-4 py-16">
-        <h2 className="mb-12 text-center text-3xl font-bold text-gray-900">What Learners Say</h2>
+        <h2 className="mb-12 text-center text-3xl font-bold text-gray-900">What Viewers Say</h2>
         <div className="grid gap-6 md:grid-cols-3">
           {testimonials.map((testimonial, idx) => (
             <div key={idx} className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -197,7 +197,7 @@ export default function Home() {
         <div className="rounded-xl bg-gradient-to-r from-gradient-coral to-gradient-amber p-12 text-center text-white">
           <h2 className="mb-4 text-3xl font-bold">Ready to Transform Your Learning?</h2>
           <p className="mb-8 text-lg text-royal-100">
-            Start exploring our curated collection of expert videos today
+            Start exploring Primrose Watson's curated video collection today
           </p>
           <Link
             to="/how-to-choose"

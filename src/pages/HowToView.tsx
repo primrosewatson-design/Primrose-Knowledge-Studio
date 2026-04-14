@@ -7,7 +7,7 @@ export default function HowToView() {
   const steps = {
     select: {
       title: 'Step 1: Select Your Videos',
-      description: 'Browse our collection and find the perfect learning materials.',
+      description: 'Browse the collection and find the perfect learning material.',
       icon: '🎬',
       details: [
         {
@@ -84,11 +84,18 @@ export default function HowToView() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-16">
+      {/* Learn about Primrose */}
+      <div className="mb-8">
+        <Link to="/about" className="inline-flex items-center gap-2 text-4xl font-bold text-gradient-violet transition-colors hover:text-purple-800">
+          Learn more about Primrose <span>→</span>
+        </Link>
+      </div>
+
       {/* Header */}
       <div className="mb-12">
         <h1 className="mb-4 text-4xl font-bold text-royal-700">How to View</h1>
         <p className="text-lg text-gray-600">
-          A complete guide to selecting, purchasing, and enjoying our expert knowledge videos.
+          A complete guide to selecting, purchasing, and enjoying Primrose Watson's knowledge videos.
         </p>
       </div>
 
@@ -160,7 +167,7 @@ export default function HowToView() {
       {/* CTA */}
       <div className="mt-16 rounded-lg bg-gradient-to-r from-royal-600 to-royal-700 p-8 text-center text-white">
         <h3 className="mb-4 text-2xl font-bold">Ready to Start Learning?</h3>
-        <p className="mb-6 text-lg">Explore our video library and find the perfect courses for your learning goals.</p>
+        <p className="mb-6 text-lg">Explore the video library and find the perfect content for your learning goals.</p>
         <Link
           to="/how-to-choose"
           className="inline-block rounded-lg bg-white px-8 py-3 font-semibold text-royal-700 transition-transform hover:scale-105"

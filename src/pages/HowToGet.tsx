@@ -133,7 +133,7 @@ export default function HowToGet() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-16">
-      <h1 className="mb-2 text-4xl font-bold text-royal-700">How to Get</h1>
+      <h1 className="mb-2 text-4xl font-bold text-royal-700">How to Pay</h1>
       <p className="mb-12 text-lg text-gray-600">
         Complete your purchase and gain instant access to your selected videos.
       </p>
