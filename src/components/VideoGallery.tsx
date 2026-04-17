@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { addToCart, getCart, subscribeToCart } from '../lib/cart'
 
 interface Video {
   id: string
@@ -19,10 +21,13 @@ export default function VideoGallery() {
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null)
+  const [cartIds, setCartIds] = useState<string[]>(() => getCart())
+
+  useEffect(() => subscribeToCart(() => setCartIds(getCart())), [])
 
   useEffect(() => {
     async function fetchVideos() {
-      const { data, error } = await supabase.from('videos').select('*').order('created_at')
+      const { data, error } = await supabase.from('videos').select('*').order('created_at', { ascending: false })
       if (error) {
         setError('Failed to load videos.')
       } else {
@@ -126,12 +131,29 @@ export default function VideoGallery() {
                   <span className="font-semibold text-gray-900">${video.price}</span>
                 </div>
 
-                <button
-                  onClick={() => setSelectedVideo(video)}
-                  className="w-full rounded-md bg-royal-600 py-2 text-center font-medium text-white transition-colors hover:bg-royal-700"
-                >
-                  Watch Now
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedVideo(video)}
+                    className="flex-1 rounded-md border border-royal-600 bg-white py-2 text-center font-medium text-royal-700 transition-colors hover:bg-royal-50"
+                  >
+                    Preview
+                  </button>
+                  {cartIds.includes(video.id) ? (
+                    <Link
+                      to="/how-to-pay"
+                      className="flex-1 rounded-md bg-gradient-violet py-2 text-center font-medium text-white transition-colors hover:opacity-90"
+                    >
+                      In Cart →
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => addToCart(video.id)}
+                      className="flex-1 rounded-md bg-royal-600 py-2 text-center font-medium text-white transition-colors hover:bg-royal-700"
+                    >
+                      Add to Cart
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
