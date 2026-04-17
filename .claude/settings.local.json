@@ -1,7 +1,27 @@
 {
   "permissions": {
     "allow": [
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "Bash(gh --version)",
+      "Bash(gh auth:*)",
+      "Read(//c/Users/PRIMRO~1/AppData/Local/Temp/claude/C--Users-PrimroseWatson-Primrose-Knowledge-Studio--claude-worktrees-jolly-goldberg/93527aee-ee23-4878-b65e-9716e9b621f5/tasks/**)",
+      "Bash(gh pr create --title 'Build complete Primrose Knowledge Studio feature set' --body ':*)",
+      "Bash(gh pr:*)",
+      "Bash(claude mcp:*)",
+      "Bash(curl -s -X POST https://api.supabase.com/v1/projects/gixlcfhgiyshmmkrvqej/database/query -H 'Authorization: Bearer sb_publishable_HeJj-Zu1z0DcK4-JDGY3gA_9DoFTpxu' -H 'Content-Type: application/json' -d '{\"query\": \"select 1\"}')",
+      "Bash(supabase --version)",
+      "Bash(npx supabase:*)",
+      "Bash(SUPABASE_ACCESS_TOKEN=sb_publishable_HeJj-Zu1z0DcK4-JDGY3gA_9DoFTpxu supabase link --project-ref gixlcfhgiyshmmkrvqej)",
+      "Bash(where supabase:*)",
+      "Bash(curl -s https://api.supabase.com/v1/projects/gixlcfhgiyshmmkrvqej -H 'Authorization: Bearer sb_publishable_HeJj-Zu1z0DcK4-JDGY3gA_9DoFTpxu')",
+      "WebFetch(domain:primrosetax.ca)",
+      "Bash(curl -s \"https://gixlcfhgiyshmmkrvqej.supabase.co/rest/v1/videos?select=title,description,category,price,duration,video_url,thumbnail&order=created_at.asc\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpeGxjZmhnaXlzaG1ta3J2cWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNzkzMzIsImV4cCI6MjA5MDk1NTMzMn0.5NQX_47IeKbE1T0ra0_z0dnOz67h7oS45zixq1lq5_w\")",
+      "mcp__ed7344e6-4a9d-4dba-bb1d-90efd5dade6d__execute_sql",
+      "mcp__ed7344e6-4a9d-4dba-bb1d-90efd5dade6d__apply_migration",
+      "mcp__ed7344e6-4a9d-4dba-bb1d-90efd5dade6d__deploy_edge_function",
+      "mcp__ed7344e6-4a9d-4dba-bb1d-90efd5dade6d__list_edge_functions",
+      "Bash(curl -s -X POST \"https://gixlcfhgiyshmmkrvqej.supabase.co/functions/v1/create-checkout\" -H \"Content-Type: application/json\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpeGxjZmhnaXlzaG1ta3J2cWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNzkzMzIsImV4cCI6MjA5MDk1NTMzMn0.5NQX_47IeKbE1T0ra0_z0dnOz67h7oS45zixq1lq5_w\" -d '{\"video_ids\":[\"e056ac9c-0f2b-4e39-85d2-c3f9bda7690e\"],\"origin\":\"https://primrose-knowledge-studio.vercel.app\"}' -w \"\\\\nHTTP:%{http_code}\\\\n\")",
+      "mcp__ed7344e6-4a9d-4dba-bb1d-90efd5dade6d__get_logs"
     ]
   }
 }
