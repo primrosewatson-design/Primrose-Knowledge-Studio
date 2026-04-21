@@ -142,9 +142,19 @@ export default function Library() {
     }
 
     if (result.kind === 'not_signed_in') {
-      // Session stale or missing — close the player and prompt a fresh sign-in.
-      setPlayer({ kind: 'idle' })
-      setAuthOpen(true)
+      // This branch should be unreachable for a user already in the Library
+      // view (we only render this page when auth.user exists, and
+      // videoAccess.ts now retries 401s with a refreshed session before
+      // giving up — see comments there). If we somehow land here anyway,
+      // show a retryable error rather than popping a re-auth modal that
+      // kicks a freshly-signed-in user back into the magic-link flow.
+      setPlayer({
+        kind: 'error',
+        videoId: item.video_id,
+        title: item.title,
+        message:
+          "We couldn't verify your access just now. Please refresh the page and try again.",
+      })
       return
     }
 
@@ -341,16 +351,6 @@ export default function Library() {
           )
         })}
       </div>
-
-      {/* Re-auth modal — used when the session silently expires between page
-          load and a watch click (the edge function returns 401 and we prompt
-          the user to sign in again without losing their library state). */}
-      <AuthModal
-        open={authOpen}
-        onClose={() => setAuthOpen(false)}
-        title="Sign in again to watch"
-        subtitle="Your session expired. Sign in with the same email to continue."
-      />
 
       {/* Player / status modal */}
       {player.kind !== 'idle' && (
