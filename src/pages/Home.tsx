@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom'
-import { useState } from 'react'
 
 const features = [
   {
@@ -47,8 +46,6 @@ const testimonials = [
 ]
 
 export default function Home() {
-  const [hoveredFeature, setHoveredFeature] = useState<string | null>(null)
-
   return (
     <div className="overflow-hidden">
       {/* Hero Section */}
@@ -110,42 +107,29 @@ export default function Home() {
           A simple process to find, purchase, and enjoy Primrose Watson's content
         </p>
 
-        <div className="grid gap-8 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-3">
           {features.map((feature, idx) => (
             <Link
               key={feature.to}
               to={feature.to}
-              onMouseEnter={() => setHoveredFeature(feature.to)}
-              onMouseLeave={() => setHoveredFeature(null)}
-              className={`group rounded-xl p-8 transition-all duration-300 ${feature.color} ${
-                hoveredFeature === feature.to
-                  ? 'scale-105 shadow-xl ring-2 ring-gradient-coral'
-                  : 'shadow-md hover:shadow-lg'
-              }`}
+              className={`group flex gap-4 rounded-lg p-6 transition-shadow hover:shadow-md ${feature.color}`}
             >
-              {/* Step Number */}
-              <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-violet text-white font-bold">
+              {/* Step Number badge */}
+              <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-violet font-bold text-white">
                 {idx + 1}
-              </div>
-
-              {/* Icon */}
-              <div className="mb-4 text-4xl transition-transform group-hover:scale-125">
-                {feature.icon}
-              </div>
-
-              {/* Title */}
-              <h3 className="mb-3 text-xl font-bold text-gray-900 group-hover:text-gradient-violet transition-colors">
-                {feature.title}
-              </h3>
-
-              {/* Description */}
-              <p className="mb-4 text-justify text-gray-700">{feature.description}</p>
-
-              {/* Arrow indicator — rose-700 picked over the coral gradient token
-                  because the latter (#f43f5e) only hits ~3.3:1 on the pastel
-                  card backgrounds, failing WCAG AA for normal text. */}
-              <div className="inline-flex items-center gap-2 font-semibold text-rose-700 transition-transform group-hover:translate-x-2">
-                Explore <span aria-hidden="true">→</span>
+              </span>
+              <div className="flex flex-1 flex-col">
+                <h3 className="mb-1 font-bold text-gray-900 transition-colors group-hover:text-gradient-violet">
+                  <span className="mr-2" aria-hidden="true">{feature.icon}</span>
+                  {feature.title}
+                </h3>
+                <p className="text-sm text-gray-700">{feature.description}</p>
+                {/* Arrow indicator — rose-700 picked over the coral gradient token
+                    because the latter (#f43f5e) only hits ~3.3:1 on the pastel
+                    card backgrounds, failing WCAG AA for normal text. */}
+                <div className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-rose-700 transition-transform group-hover:translate-x-1">
+                  Explore <span aria-hidden="true">→</span>
+                </div>
               </div>
             </Link>
           ))}
