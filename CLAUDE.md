@@ -19,49 +19,64 @@ Online video learning platform by Primrose Watson — Canadian lawyer and legal 
 | `/` | Home.tsx | Hero, stats, feature cards, testimonials, CTAs |
 | `/how-to-view` | HowToView.tsx | Step-by-step guide: Select → Pay → View |
 | `/how-to-choose` | HowToChoose.tsx | Video gallery (live Supabase data) |
-| `/how-to-pay` | HowToGet.tsx | Shopping cart + checkout form |
+| `/how-to-pay` | HowToGet.tsx | Shopping cart + Stripe checkout |
 | `/about` | About.tsx | Primrose Watson bio, credentials, headshot |
+| `/library` | Library.tsx | Auth-gated list of purchased videos with remaining views |
+| `/auth/callback` | AuthCallback.tsx | Magic-link redirect target |
 
-**Layout:** MainLayout.tsx wraps all routes (header nav, footer with LinkedIn/Instagram).
+**Layout:** MainLayout.tsx wraps all routes (header nav with conditional "My Library" link for signed-in users, footer with LinkedIn/Instagram).
 
 ## Components
 
-- **VideoGallery.tsx** — Fetches from Supabase `videos` table. Search, category filter, video cards with price, modal player with iframe embed.
+- **VideoGallery.tsx** — Fetches from Supabase `videos` table. Search, category filter, video cards with price, Preview button (free 30-second YouTube clip), modal player with iframe embed + view-counter wiring.
+- **AuthModal.tsx** — Magic-link sign-in modal. Sends one-time email via `supabase.auth.signInWithOtp`; user clicks link and lands on `/auth/callback`.
 
 ## Database Schema (Supabase)
 
-- **videos** — id, title, description, thumbnail, duration, category, video_url, price, created_at
-- **purchases** — id, user_id (FK auth.users), video_id (FK videos), email, amount_paid, created_at. Unique on (user_id, video_id)
+- **videos** — id, title, description, thumbnail, duration, category, video_url, preview_youtube_id, price, stripe_price_id, created_at
+- **purchases** — id, user_id (FK auth.users), video_id (FK videos), email, amount_paid, stripe_session_id, refunded_at, created_at. Unique on (user_id, video_id)
 - **video_views** — id, user_id, video_id, view_count, last_viewed_at. Unique on (user_id, video_id). Tracks 5-view limit.
-- **RLS enabled** on all tables. Videos are public read (SELECT only for anon). Purchases and views scoped to auth.uid().
-- **Writes via Supabase MCP** — Anon key can't UPDATE/INSERT. Use the Supabase MCP server (`mcp__*__execute_sql`) for any data changes, or the Supabase SQL Editor as a fallback.
+- **cart_items** — user_id (FK auth.users), video_id (FK videos), added_at. Composite PK on (user_id, video_id). Cross-device cart persistence for signed-in users.
+- **RLS enabled** on all tables. Videos are public read (SELECT only for anon). Purchases/views/cart are scoped to `auth.uid()`. Purchases also allow SELECT when JWT email matches the row — so rows inserted pre-auth by the Stripe webhook still surface after sign-in.
+- **Writes via Supabase MCP** — Anon key can't UPDATE/INSERT on videos. Use the Supabase MCP server (`mcp__*__execute_sql`, `apply_migration`) for any DDL/admin data changes, or the Supabase SQL Editor as a fallback.
 - **Current videos (6 rows):**
   - 🎬 **Rent, Food, or Future?** — Navigating Canada's Cost-of-Living Crisis — Life Skills — $9.99 — 11:08 — YouTube `0zdwhFaSCkE` (first real video)
   - 5 placeholder seeds (TypeScript, CSS, Node.js, Database, JavaScript) — to be replaced as Primrose uploads real videos
 - **Gallery sort** — `created_at DESC`, so newest real video appears first. When adding a real video, also bump `created_at = NOW()` if it replaces a placeholder (batch-seed timestamps are identical and won't sort correctly otherwise).
 - **Thumbnails** — Real videos use `https://img.youtube.com/vi/<VIDEO_ID>/maxresdefault.jpg` (HD 1280×720).
 
+## Supabase Edge Functions
+
+- **create-checkout** — Creates a Stripe Checkout Session from cart `video_ids`. Redirects to `${SITE_URL}/how-to-pay?success=...`.
+- **stripe-webhook** — Handles `checkout.session.completed` (inserts `purchases` rows + sends Resend confirmation email) and `charge.refunded` (stamps `refunded_at`). `verify_jwt: false` so Stripe can hit it.
+- **get-video-access** — Auth-gated. Verifies the user has a non-refunded purchase for `video_id`, atomically bumps `video_views.view_count` (rejects at 5), and returns the `video_url`.
+
 ## What Works vs. In Progress
 
 ### Working
 - Video gallery with live Supabase data, search, filtering, newest-first sort
-- Video player modal (iframe embed)
+- Free Preview button per video (30s YouTube clip) + unlock CTA to cart
+- Video player modal (iframe embed) with 5-view enforcement via `get-video-access` edge function
 - First real video live: "Rent, Food, or Future?" with authentic YouTube thumbnail
+- Magic-link authentication (Supabase OTP) + `/auth/callback` handler + conditional "My Library" nav link
+- `/library` page — signed-in users see purchased videos with remaining views, watch button, view-limit modal
+- Stripe live checkout via `create-checkout` edge function (real prices, session redirect)
+- Stripe webhook handling: purchases inserted on `checkout.session.completed`, `refunded_at` stamped on `charge.refunded`
+- Order confirmation email via Resend from the webhook (graceful degradation if keys not configured)
+- Cart with real Supabase video data + cross-device persistence for signed-in users (`cart_items` table)
 - All page routing and navigation
 - About page with real bio from primrosetax.ca
 - Responsive design across all pages
 - Vercel deployment with SPA routing
 - Social links (LinkedIn, Instagram)
 - Supabase MCP server wired up for direct DB writes
+- a11y audit: 0 axe violations (WCAG 2.1 AA + best-practice) across all routes
 
 ### Not Yet Implemented
-- **Authentication** — Schema supports it, no login/signup UI
-- **Stripe payments** — Checkout form is mock (2s delay simulation). VITE_STRIPE_PUBLISHABLE_KEY is placeholder.
-- **Purchase tracking** — DB table exists, not wired to UI
-- **5-view enforcement** — DB table exists, not enforced in player
-- **Cart persistence** — Client-side state only, resets on refresh
-- **Admin/video upload** — No admin panel
-- **Cart items on How to Pay** — Currently hardcoded mock items, not connected to gallery
+- **Admin/video upload** — No admin panel; videos are seeded via Supabase MCP
+- **Resend configuration** — webhook code is live but needs `RESEND_API_KEY`, `RESEND_FROM`, `SITE_URL` secrets set in Supabase → Edge Functions → Settings before emails actually send
+- **Stripe webhook event subscription** — dashboard must include `charge.refunded` in addition to `checkout.session.completed`
+- **Content backlog** — 5 placeholder videos still in `videos` table awaiting real replacements
 
 ## Design System
 
@@ -76,15 +91,30 @@ Online video learning platform by Primrose Watson — Canadian lawyer and legal 
 **Background:** White (bg-white) with dark text (text-gray-900)
 **Font:** Inter (system-ui fallback)
 
+### Card Patterns
+- **Home feature cards** — horizontal flex layout (`flex gap-4 rounded-lg p-6`), badge/icon on left + content stack on right. Shared between "Get Started in 3 Steps" and "Why Choose Primrose Knowledge Studio?" so both sections read as one visual family. Keep them consistent — if you change one, change the other.
+- **Coral/rose accent text** — Use `text-rose-700` on pastel card backgrounds, not `text-gradient-coral` (#F43F5E). The coral gradient token fails WCAG AA contrast (~3.3:1) on the pastel tints.
+
 ## Environment Variables
 
+Client (Vite, `.env` + Vercel project settings):
 ```
 VITE_SUPABASE_URL=https://gixlcfhgiyshmmkrvqej.supabase.co
 VITE_SUPABASE_ANON_KEY=<jwt>
-VITE_STRIPE_PUBLISHABLE_KEY=<not configured>
 ```
 
-`.env` is gitignored. For Vercel deployment, set these in Vercel project settings.
+Edge function secrets (Supabase → Edge Functions → Settings):
+```
+STRIPE_SECRET_KEY=<live or test sk>
+STRIPE_WEBHOOK_SECRET=<whsec_...>
+SUPABASE_URL=<auto>
+SUPABASE_SERVICE_ROLE_KEY=<auto>
+RESEND_API_KEY=<re_...>            # optional — webhook skips email if unset
+RESEND_FROM="Primrose Knowledge Studio <mail@domain.com>"  # optional
+SITE_URL=https://primroseknowledgestudio.com  # optional
+```
+
+`.env` is gitignored.
 
 ## Rules
 
@@ -106,22 +136,31 @@ src/
   main.tsx             # Entry point
   index.css            # Tailwind theme + color palette
   layouts/
-    MainLayout.tsx     # Nav header + footer wrapper
+    MainLayout.tsx     # Nav header + footer wrapper (conditional Library link)
   lib/
     supabase.ts        # Supabase client
+    auth.tsx           # AuthProvider + useAuth() hook (magic-link + cart sync)
+    cart.ts            # localStorage cart + Supabase cross-device mirror
   components/
-    VideoGallery.tsx   # Video grid with Supabase integration
+    VideoGallery.tsx   # Video grid + Preview modal + live Supabase data
+    AuthModal.tsx      # Magic-link sign-in modal
   pages/
     Home.tsx           # Landing page
     HowToView.tsx      # Instructional guide
     HowToChoose.tsx    # Video gallery wrapper
-    HowToGet.tsx       # Cart + checkout (mock)
+    HowToGet.tsx       # Cart + Stripe checkout
     About.tsx          # Primrose Watson bio
+    Library.tsx        # Auth-gated purchased-video list
+    AuthCallback.tsx   # Magic-link redirect handler
 public/
   Headshot.jpg         # Profile photo
   favicon.svg
 supabase/
   schema.sql           # DB schema + seed data
+  functions/
+    create-checkout/index.ts   # Stripe Checkout Session
+    stripe-webhook/index.ts    # checkout.session.completed + charge.refunded + Resend email
+    get-video-access/index.ts  # Auth-gated view unlock (5-view limit)
 vercel.json            # SPA routing
 .mcp.json              # Supabase MCP config
 ```
