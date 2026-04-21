@@ -102,6 +102,7 @@ Client (Vite, `.env` + Vercel project settings):
 ```
 VITE_SUPABASE_URL=https://gixlcfhgiyshmmkrvqej.supabase.co
 VITE_SUPABASE_ANON_KEY=<jwt>
+VITE_SITE_URL=https://primroseknowledgestudio.com  # magic-link redirect target — must be the deployed origin, NOT window.location.origin, or dev-origin links fail with ERR_CONNECTION_REFUSED
 ```
 
 Edge function secrets (Supabase → Edge Functions → Settings):

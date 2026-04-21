@@ -79,10 +79,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [userId])
 
   const signInWithEmail: AuthContextValue['signInWithEmail'] = async (email) => {
+    // Magic-link redirect target. VITE_SITE_URL is the stable public origin
+    // (e.g. https://primroseknowledgestudio.com). We fall back to the current
+    // origin only in dev — otherwise the link baked into the email would point
+    // at whatever origin the user happened to be on when they clicked "Send",
+    // which for localhost means ERR_CONNECTION_REFUSED the moment the link is
+    // opened from a phone, another browser, or after the dev server stops.
+    const siteUrl = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '')
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${siteUrl}/auth/callback`,
       },
     })
     return { error: error ? error.message : null }
