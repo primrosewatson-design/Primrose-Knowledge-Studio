@@ -17,17 +17,35 @@ export default function AuthModal({ open, onClose, title, subtitle }: AuthModalP
 
   if (!open) return null
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Shared send logic — reused by the initial form submit and the "Resend"
+  // button in the success state. Keeps the UI on the sent-confirmation screen
+  // when the resend succeeds (so the user doesn't lose their place) and
+  // surfaces any Supabase rate-limit error inline.
+  const sendLink = async () => {
     setError(null)
     setSubmitting(true)
     const { error } = await signInWithEmail(email.trim().toLowerCase())
     setSubmitting(false)
     if (error) {
       setError(error)
-    } else {
-      setSent(true)
+      return false
     }
+    setSent(true)
+    return true
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await sendLink()
+  }
+
+  const handleResend = async () => {
+    await sendLink()
+  }
+
+  const handleUseDifferentEmail = () => {
+    setSent(false)
+    setError(null)
   }
 
   const handleClose = () => {
@@ -56,12 +74,37 @@ export default function AuthModal({ open, onClose, title, subtitle }: AuthModalP
         {subtitle && !sent && <p className="mb-4 text-sm text-gray-600">{subtitle}</p>}
 
         {sent ? (
-          <div className="rounded-lg bg-green-50 p-4 text-sm text-green-800">
-            <p className="font-semibold">Check your inbox</p>
-            <p className="mt-1">
-              We sent a sign-in link to <span className="font-mono">{email}</span>. Click it to finish
-              signing in. You can close this window.
-            </p>
+          <div>
+            <div className="rounded-lg bg-green-50 p-4 text-sm text-green-800">
+              <p className="font-semibold">Check your inbox</p>
+              <p className="mt-1">
+                We sent a sign-in link to <span className="font-mono">{email}</span>. Click it to finish
+                signing in. You can close this window.
+              </p>
+            </div>
+
+            {error && (
+              <div className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={submitting}
+              className="mt-4 w-full rounded-lg border-2 border-royal-600 bg-white px-4 py-2.5 text-sm font-semibold text-royal-700 transition-colors hover:bg-royal-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {submitting ? 'Sending…' : "Didn't get it? Resend link"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleUseDifferentEmail}
+              className="mt-2 w-full rounded-md px-3 py-1.5 text-center text-xs text-gray-600 hover:text-royal-700 hover:underline"
+            >
+              Use a different email
+            </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
