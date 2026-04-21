@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { Link, Outlet } from 'react-router-dom'
+import { useAuth } from '../lib/auth'
+import AuthModal from '../components/AuthModal'
 
 const navLinks = [
   { to: '/', label: 'Home' },
@@ -9,14 +12,17 @@ const navLinks = [
 ]
 
 export default function MainLayout() {
+  const { user, signOut, loading } = useAuth()
+  const [authOpen, setAuthOpen] = useState(false)
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-royal-100 bg-white">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+        <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4">
           <Link to="/" className="text-xl font-bold text-royal-500">
             Primrose Knowledge Studio
           </Link>
-          <ul className="flex gap-6">
+          <ul className="hidden gap-6 md:flex">
             {navLinks.map((link) => (
               <li key={link.to}>
                 <Link
@@ -28,6 +34,30 @@ export default function MainLayout() {
               </li>
             ))}
           </ul>
+          <div className="flex items-center gap-3">
+            {loading ? (
+              <span className="text-xs text-gray-400">…</span>
+            ) : user ? (
+              <>
+                <span className="hidden max-w-[200px] truncate text-xs text-gray-500 md:inline">
+                  {user.email}
+                </span>
+                <button
+                  onClick={() => signOut()}
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setAuthOpen(true)}
+                className="rounded-md bg-royal-600 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-royal-700"
+              >
+                Sign in
+              </button>
+            )}
+          </div>
         </nav>
       </header>
 
@@ -46,6 +76,13 @@ export default function MainLayout() {
         </div>
         &copy; {new Date().getFullYear()} Primrose Knowledge Studio. All rights reserved.
       </footer>
+
+      <AuthModal
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+        title="Sign in to Primrose Knowledge Studio"
+        subtitle="We'll email you a one-click sign-in link — no password needed."
+      />
     </div>
   )
 }

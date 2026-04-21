@@ -38,6 +38,20 @@ Deno.serve(async (req) => {
     const email = session.customer_details?.email || session.customer_email || 'unknown@example.com'
     const amountTotal = (session.amount_total || 0) / 100
 
+    // If checkout was initiated by a signed-in user, metadata carries their id.
+    // Otherwise, try to resolve via email lookup against auth.users so the purchase
+    // lands attached to an account immediately (falls back to null for new emails).
+    let userId: string | null = session.metadata?.user_id ?? null
+    if (!userId && email) {
+      try {
+        const { data: list } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 })
+        const match = list?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase())
+        if (match) userId = match.id
+      } catch (e) {
+        console.warn('Could not resolve user by email:', (e as Error).message)
+      }
+    }
+
     // Fetch the per-item amounts so we can record each purchase row
     const { data: videos, error: vErr } = await supabase
       .from('videos')
@@ -50,7 +64,7 @@ Deno.serve(async (req) => {
     }
 
     const rows = videos.map((v) => ({
-      user_id: null, // guest purchase for now
+      user_id: userId,
       video_id: v.id,
       email,
       amount_paid: v.price,
