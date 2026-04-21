@@ -165,7 +165,7 @@ export default function VideoGallery() {
 
       {/* Category Filter */}
       <div className="mb-8">
-        <h3 className="mb-4 text-lg font-semibold text-gray-900">Filter by category</h3>
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">Filter by category</h2>
         <div className="flex flex-wrap gap-2">
           {categories.map((category) => (
             <button
@@ -210,7 +210,15 @@ export default function VideoGallery() {
               >
                 {/* Thumbnail */}
                 <div className="relative h-40 overflow-hidden bg-gray-200">
-                  <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover" />
+                  <img
+                    src={video.thumbnail}
+                    alt={video.title}
+                    loading="lazy"
+                    decoding="async"
+                    width="640"
+                    height="360"
+                    className="h-full w-full object-cover"
+                  />
                   <div className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-sm text-white">
                     {video.duration}
                   </div>

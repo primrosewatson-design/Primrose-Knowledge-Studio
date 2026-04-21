@@ -294,7 +294,15 @@ export default function Library() {
             >
               <div className="relative h-40 overflow-hidden bg-gray-200">
                 {item.thumbnail ? (
-                  <img src={item.thumbnail} alt={item.title} className="h-full w-full object-cover" />
+                  <img
+                    src={item.thumbnail}
+                    alt={item.title}
+                    loading="lazy"
+                    decoding="async"
+                    width="640"
+                    height="360"
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-gray-400">
                     No thumbnail
