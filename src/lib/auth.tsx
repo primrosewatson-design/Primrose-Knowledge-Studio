@@ -15,6 +15,7 @@ interface AuthContextValue {
   user: User | null
   loading: boolean
   signInWithEmail: (email: string) => Promise<{ error: string | null }>
+  verifyEmailOtp: (email: string, token: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
 }
 
@@ -95,6 +96,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error ? error.message : null }
   }
 
+  // Verify a 6-digit OTP code from an existing magic-link email. Every email
+  // sent via signInWithOtp embeds both a link and a numeric code; verifying
+  // the code here lets a user complete sign-in even when they're currently
+  // rate-limited on email sends (Supabase default: 1/60s per address), or
+  // when the magic link got broken by an email client rewrite.
+  const verifyEmailOtp: AuthContextValue['verifyEmailOtp'] = async (email, token) => {
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: token.trim(),
+      type: 'email',
+    })
+    return { error: error ? error.message : null }
+  }
+
   const signOut = async () => {
     // Disable the server mirror BEFORE clearing the cart, so the clear
     // affects only localStorage. Server cart is kept intact — when this
@@ -105,7 +120,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signInWithEmail, signOut }}>
+    <AuthContext.Provider
+      value={{ session, user: session?.user ?? null, loading, signInWithEmail, verifyEmailOtp, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   )
