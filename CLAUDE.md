@@ -38,6 +38,7 @@ Online video learning platform by Primrose Watson — Canadian lawyer and legal 
 - **video_views** — id, user_id, video_id, view_count, last_viewed_at. Unique on (user_id, video_id). Tracks 5-view limit.
 - **cart_items** — user_id (FK auth.users), video_id (FK videos), added_at. Composite PK on (user_id, video_id). Cross-device cart persistence for signed-in users.
 - **RLS enabled** on all tables. Videos are public read (SELECT only for anon). Purchases/views/cart are scoped to `auth.uid()`. Purchases also allow SELECT when JWT email matches the row — so rows inserted pre-auth by the Stripe webhook still surface after sign-in.
+- **Purchases orphan-claim policy** — `"Users claim own email-matched purchases"` (UPDATE) lets a signed-in user attach their `user_id` to rows where `user_id IS NULL AND lower(email) = jwt_email`. WITH CHECK forces the new `user_id = auth.uid()`, so callers can only claim rows for themselves. This is what `AuthCallback.tsx` relies on when it backfills pre-auth purchases after a magic-link sign-in. Migration: `purchases_claim_orphan_by_email_policy`.
 - **Writes via Supabase MCP** — Anon key can't UPDATE/INSERT on videos. Use the Supabase MCP server (`mcp__*__execute_sql`, `apply_migration`) for any DDL/admin data changes, or the Supabase SQL Editor as a fallback.
 - **Current videos (6 rows):**
   - 🎬 **Rent, Food, or Future?** — Navigating Canada's Cost-of-Living Crisis — Life Skills — $9.99 — 11:08 — YouTube `0zdwhFaSCkE` (first real video)
