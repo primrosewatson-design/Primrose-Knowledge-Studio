@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { requestVideoAccess } from '../lib/videoAccess'
-import { useAuth } from '../lib/auth'
+import { useAuth } from '../lib/useAuth'
 import AuthModal from '../components/AuthModal'
 
 // A row in the purchased-library list. `views_used` is best-effort — pulled
