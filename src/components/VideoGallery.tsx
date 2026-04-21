@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { requestVideoAccess } from '../lib/videoAccess'
 import { useAuth } from '../lib/auth'
 import { addToCart, getCart, subscribeToCart } from '../lib/cart'
 import AuthModal from './AuthModal'
@@ -94,36 +95,28 @@ export default function VideoGallery() {
       return
     }
     setFullAccess({ kind: 'loading' })
-    try {
-      const { data, error } = await supabase.functions.invoke('get-video-access', {
-        body: { video_id: selectedVideo.id },
-      })
-      if (error) {
-        const ctx = (error as { context?: Response }).context
-        let payload: { error?: string } = {}
-        if (ctx && typeof (ctx as Response).json === 'function') {
-          try {
-            payload = await (ctx as Response).clone().json()
-          } catch {
-            /* ignore */
-          }
-        }
-        if (payload.error === 'not_signed_in') return setFullAccess({ kind: 'needs_signin' })
-        if (payload.error === 'not_purchased') return setFullAccess({ kind: 'not_purchased' })
-        if (payload.error === 'view_limit_reached') return setFullAccess({ kind: 'view_limit' })
-        return setFullAccess({ kind: 'error', message: payload.error || error.message })
-      }
-      if (!data?.video_url) {
-        return setFullAccess({ kind: 'error', message: 'No video URL returned' })
-      }
-      setFullAccess({
-        kind: 'playing',
-        url: data.video_url,
-        views_used: data.views_used,
-        views_remaining: data.views_remaining,
-      })
-    } catch (err) {
-      setFullAccess({ kind: 'error', message: (err as Error).message })
+    const result = await requestVideoAccess(selectedVideo.id)
+    switch (result.kind) {
+      case 'ok':
+        setFullAccess({
+          kind: 'playing',
+          url: result.video_url,
+          views_used: result.views_used,
+          views_remaining: result.views_remaining,
+        })
+        return
+      case 'not_signed_in':
+        setFullAccess({ kind: 'needs_signin' })
+        return
+      case 'not_purchased':
+        setFullAccess({ kind: 'not_purchased' })
+        return
+      case 'view_limit_reached':
+        setFullAccess({ kind: 'view_limit' })
+        return
+      case 'error':
+        setFullAccess({ kind: 'error', message: result.message })
+        return
     }
   }
 
