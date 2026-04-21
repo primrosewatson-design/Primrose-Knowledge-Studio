@@ -111,13 +111,30 @@ export default function Library() {
   const watch = async (item: LibraryItem) => {
     setPlayer({ kind: 'loading', videoId: item.video_id })
     try {
+      // Explicitly fetch the session so we always send the user's access_token.
+      // If we let functions.invoke() fall back to the client's default JWT, it
+      // can send the anon key when the in-memory session is null/stale — and
+      // the edge function rejects that with 401 ("missing sub claim"), since
+      // the anon JWT has role=anon and no `sub`. getSession() also triggers an
+      // auto-refresh if the current token is expired.
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (!accessToken) {
+        setPlayer({ kind: 'idle' })
+        setAuthOpen(true)
+        return
+      }
+
       const { data, error } = await supabase.functions.invoke('get-video-access', {
         body: { video_id: item.video_id },
+        headers: { Authorization: `Bearer ${accessToken}` },
       })
       if (error) {
         const ctx = (error as { context?: Response }).context
         let payload: { error?: string; views_used?: number } = {}
+        let status = 0
         if (ctx && typeof (ctx as Response).json === 'function') {
+          status = (ctx as Response).status ?? 0
           try {
             payload = await (ctx as Response).clone().json()
           } catch {
@@ -132,6 +149,13 @@ export default function Library() {
             ),
           )
           return setPlayer({ kind: 'view_limit', videoId: item.video_id, title: item.title })
+        }
+        if (status === 401 || payload.error === 'not_signed_in') {
+          // Session stale or missing on the server — prompt re-sign-in. Close
+          // the player modal so the auth modal isn't buried behind it.
+          setPlayer({ kind: 'idle' })
+          setAuthOpen(true)
+          return
         }
         return setPlayer({
           kind: 'error',
@@ -353,6 +377,16 @@ export default function Library() {
           )
         })}
       </div>
+
+      {/* Re-auth modal — used when the session silently expires between page
+          load and a watch click (the edge function returns 401 and we prompt
+          the user to sign in again without losing their library state). */}
+      <AuthModal
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+        title="Sign in again to watch"
+        subtitle="Your session expired. Sign in with the same email to continue."
+      />
 
       {/* Player / status modal */}
       {player.kind !== 'idle' && (
