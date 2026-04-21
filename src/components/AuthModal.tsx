@@ -8,25 +8,46 @@ interface AuthModalProps {
   subtitle?: string
 }
 
+// Supabase surfaces rate-limit errors as messages containing "rate limit" or
+// (less commonly) the error_code "over_email_send_rate_limit". Detecting it
+// lets us flip into the code-entry flow without forcing a second email.
+function isRateLimitError(message: string | null): boolean {
+  if (!message) return false
+  const m = message.toLowerCase()
+  return m.includes('rate limit') || m.includes('too many')
+}
+
 export default function AuthModal({ open, onClose, title, subtitle }: AuthModalProps) {
-  const { signInWithEmail } = useAuth()
+  const { signInWithEmail, verifyEmailOtp } = useAuth()
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
+  const [rateLimited, setRateLimited] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [code, setCode] = useState('')
+  const [verifying, setVerifying] = useState(false)
+  const [codeError, setCodeError] = useState<string | null>(null)
 
   if (!open) return null
 
   // Shared send logic — reused by the initial form submit and the "Resend"
-  // button in the success state. Keeps the UI on the sent-confirmation screen
-  // when the resend succeeds (so the user doesn't lose their place) and
-  // surfaces any Supabase rate-limit error inline.
+  // button in the success state. If Supabase rate-limits the email send, we
+  // still advance into the "sent" state so the user can enter the 6-digit
+  // code from an email they already received (the code works independently
+  // of the link, so a fresh email isn't actually required).
   const sendLink = async () => {
     setError(null)
+    setRateLimited(false)
     setSubmitting(true)
     const { error } = await signInWithEmail(email.trim().toLowerCase())
     setSubmitting(false)
     if (error) {
+      if (isRateLimitError(error)) {
+        setRateLimited(true)
+        setSent(true) // show the code-entry UI so the user isn't blocked
+        return false
+      }
       setError(error)
       return false
     }
@@ -45,13 +66,33 @@ export default function AuthModal({ open, onClose, title, subtitle }: AuthModalP
 
   const handleUseDifferentEmail = () => {
     setSent(false)
+    setRateLimited(false)
     setError(null)
+    setCode('')
+    setCodeError(null)
+  }
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCodeError(null)
+    setVerifying(true)
+    const { error } = await verifyEmailOtp(email.trim().toLowerCase(), code)
+    setVerifying(false)
+    if (error) {
+      setCodeError(error)
+      return
+    }
+    // Session is set by Supabase; AuthProvider picks it up via onAuthStateChange.
+    handleClose()
   }
 
   const handleClose = () => {
     setEmail('')
     setSent(false)
+    setRateLimited(false)
     setError(null)
+    setCode('')
+    setCodeError(null)
     onClose()
   }
 
@@ -75,13 +116,24 @@ export default function AuthModal({ open, onClose, title, subtitle }: AuthModalP
 
         {sent ? (
           <div>
-            <div className="rounded-lg bg-green-50 p-4 text-sm text-green-800">
-              <p className="font-semibold">Check your inbox</p>
-              <p className="mt-1">
-                We sent a sign-in link to <span className="font-mono">{email}</span>. Click it to finish
-                signing in. You can close this window.
-              </p>
-            </div>
+            {rateLimited ? (
+              <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+                <p className="font-semibold">Too many sign-in emails</p>
+                <p className="mt-1">
+                  We've sent sign-in emails to <span className="font-mono">{email}</span> recently.
+                  Open the most recent one and either click the link <strong>or</strong> enter the
+                  6-digit code from the email below — no need to wait for another email.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg bg-green-50 p-4 text-sm text-green-800">
+                <p className="font-semibold">Check your inbox</p>
+                <p className="mt-1">
+                  We sent a sign-in link to <span className="font-mono">{email}</span>. Click the
+                  link <strong>or</strong> enter the 6-digit code from the email below.
+                </p>
+              </div>
+            )}
 
             {error && (
               <div className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">
@@ -89,14 +141,52 @@ export default function AuthModal({ open, onClose, title, subtitle }: AuthModalP
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={handleResend}
-              disabled={submitting}
-              className="mt-4 w-full rounded-lg border-2 border-royal-600 bg-white px-4 py-2.5 text-sm font-semibold text-royal-700 transition-colors hover:bg-royal-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {submitting ? 'Sending…' : "Didn't get it? Resend link"}
-            </button>
+            {/* Code entry — works on both the normal "sent" flow and the rate-limited flow */}
+            <form onSubmit={handleVerifyCode} className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="auth-code" className="mb-1 block text-sm font-medium text-gray-700">
+                  6-digit code from email
+                </label>
+                <input
+                  id="auth-code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  autoFocus
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="123456"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 font-mono text-lg tracking-widest text-gray-900 focus:border-royal-600 focus:outline-none focus:ring-2 focus:ring-royal-600/20"
+                />
+              </div>
+
+              {codeError && (
+                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">
+                  {codeError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={verifying || code.length !== 6}
+                className="w-full rounded-lg bg-royal-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-royal-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {verifying ? 'Signing in…' : 'Sign in with code'}
+              </button>
+            </form>
+
+            {!rateLimited && (
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={submitting}
+                className="mt-3 w-full rounded-lg border-2 border-royal-600 bg-white px-4 py-2.5 text-sm font-semibold text-royal-700 transition-colors hover:bg-royal-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {submitting ? 'Sending…' : "Didn't get it? Resend link"}
+              </button>
+            )}
 
             <button
               type="button"
