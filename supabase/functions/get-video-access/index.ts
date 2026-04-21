@@ -1,4 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
 // Edge Function: get-video-access
 // Deploy with verify_jwt=true — caller must send a valid Supabase Auth JWT.
 //
@@ -50,13 +49,13 @@ Deno.serve(async (req) => {
   const email = (user.email || '').toLowerCase()
 
   // Parse body
-  let body: any
+  let body: { video_id?: unknown } = {}
   try {
-    body = await req.json()
+    body = (await req.json()) as { video_id?: unknown }
   } catch {
     return json(400, { error: 'bad_request' })
   }
-  const videoId: string | undefined = body?.video_id
+  const videoId = body.video_id
   if (!videoId || typeof videoId !== 'string') return json(400, { error: 'bad_request' })
 
   // Look up the video including video_url (service_role can read it).
@@ -72,17 +71,26 @@ Deno.serve(async (req) => {
   // Check purchase. Match by user_id OR email (covers pre-auth purchases).
   // Refunded purchases (refunded_at IS NOT NULL) are excluded — charge.refunded
   // webhook stamps that column, so playback is revoked the moment Stripe processes the refund.
+  type PurchaseRow = {
+    id: string
+    user_id: string | null
+    email: string | null
+    refunded_at: string | null
+  }
   const { data: purchases, error: purchaseErr } = await admin
     .from('purchases')
     .select('id, user_id, email, refunded_at')
     .eq('video_id', videoId)
     .is('refunded_at', null)
     .or(`user_id.eq.${user.id},email.eq.${email}`)
+    .returns<PurchaseRow[]>()
   if (purchaseErr) return json(500, { error: 'internal' })
   if (!purchases || purchases.length === 0) return json(402, { error: 'not_purchased' })
 
   // Opportunistically backfill user_id on email-matched rows.
-  const orphanIds = purchases.filter((p: any) => !p.user_id && p.email && p.email.toLowerCase() === email).map((p: any) => p.id)
+  const orphanIds = purchases
+    .filter((p) => !p.user_id && p.email && p.email.toLowerCase() === email)
+    .map((p) => p.id)
   if (orphanIds.length > 0) {
     await admin.from('purchases').update({ user_id: user.id }).in('id', orphanIds)
   }

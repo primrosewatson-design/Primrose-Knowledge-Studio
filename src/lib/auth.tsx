@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Session, User } from '@supabase/supabase-js'
+import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import {
   clearCart,
@@ -9,17 +9,7 @@ import {
   subscribeToCart,
   syncCartWithServer,
 } from './cart'
-
-interface AuthContextValue {
-  session: Session | null
-  user: User | null
-  loading: boolean
-  signInWithEmail: (email: string) => Promise<{ error: string | null }>
-  verifyEmailOtp: (email: string, token: string) => Promise<{ error: string | null }>
-  signOut: () => Promise<void>
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null)
+import { AuthContext, type AuthContextValue } from './useAuth'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -126,10 +116,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   )
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
-  return ctx
 }

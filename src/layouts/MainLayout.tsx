@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { useAuth } from '../lib/auth'
+import { useAuth } from '../lib/useAuth'
 import AuthModal from '../components/AuthModal'
 
 const baseNavLinks = [
@@ -25,10 +25,16 @@ export default function MainLayout() {
   const navLinks = user ? [...baseNavLinks, libraryLink] : baseNavLinks
 
   // Close the mobile menu whenever the route changes, so tapping a link
-  // actually dismisses the overlay instead of leaving it covering the new page.
-  useEffect(() => {
+  // actually dismisses the overlay instead of leaving it covering the new
+  // page. Using the "reset state on prop change" pattern from the React docs
+  // (https://react.dev/learn/you-might-not-need-an-effect) instead of an
+  // Effect — setState during render is safe and cheaper than scheduling a
+  // second commit, and sidesteps the react-hooks/set-state-in-effect lint.
+  const [prevPath, setPrevPath] = useState(location.pathname)
+  if (prevPath !== location.pathname) {
+    setPrevPath(location.pathname)
     setMobileNavOpen(false)
-  }, [location.pathname])
+  }
 
   // Lock body scroll while the mobile menu is open so the backdrop doesn't
   // scroll the underlying page on small screens.

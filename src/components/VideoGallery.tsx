@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { requestVideoAccess } from '../lib/videoAccess'
-import { useAuth } from '../lib/auth'
+import { useAuth } from '../lib/useAuth'
 import { addToCart, getCart, subscribeToCart } from '../lib/cart'
 import AuthModal from './AuthModal'
 
