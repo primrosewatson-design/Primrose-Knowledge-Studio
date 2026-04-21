@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import AuthModal from '../components/AuthModal'
 
-const navLinks = [
+const baseNavLinks = [
   { to: '/', label: 'Home' },
   { to: '/how-to-view', label: 'How to View' },
   { to: '/how-to-choose', label: 'How to Choose' },
@@ -11,11 +11,18 @@ const navLinks = [
   { to: '/about', label: 'Primrose Watson' },
 ]
 
+// Library only makes sense when signed in — unauthenticated users get an
+// auth-prompt page otherwise, which is correct but not something to advertise
+// in the top nav.
+const libraryLink = { to: '/library', label: 'My Library' }
+
 export default function MainLayout() {
   const { user, signOut, loading } = useAuth()
   const [authOpen, setAuthOpen] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const location = useLocation()
+
+  const navLinks = user ? [...baseNavLinks, libraryLink] : baseNavLinks
 
   // Close the mobile menu whenever the route changes, so tapping a link
   // actually dismisses the overlay instead of leaving it covering the new page.

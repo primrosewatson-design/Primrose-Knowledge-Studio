@@ -9,6 +9,7 @@ import About from './pages/About'
 import CheckoutSuccess from './pages/CheckoutSuccess'
 import CheckoutCancel from './pages/CheckoutCancel'
 import AuthCallback from './pages/AuthCallback'
+import Library from './pages/Library'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
             <Route path="/how-to-choose" element={<HowToChoose />} />
             <Route path="/how-to-pay" element={<HowToGet />} />
             <Route path="/about" element={<About />} />
+            <Route path="/library" element={<Library />} />
             <Route path="/checkout/success" element={<CheckoutSuccess />} />
             <Route path="/checkout/cancel" element={<CheckoutCancel />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
