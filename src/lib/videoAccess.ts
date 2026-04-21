@@ -31,6 +31,35 @@ export type VideoAccessResult =
   | { kind: 'view_limit_reached'; views_used?: number }
   | { kind: 'error'; message: string }
 
+// Single POST to the edge function. Returned as a tuple so the caller can
+// distinguish a network-level failure (no Response object) from an HTTP-level
+// failure we can retry on.
+async function postGetVideoAccess(
+  videoId: string,
+  accessToken: string,
+): Promise<{ response: Response } | { networkError: string }> {
+  const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? ''
+  const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? ''
+  if (!supabaseUrl || !anonKey) {
+    return { networkError: 'Supabase is not configured.' }
+  }
+  const url = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/get-video-access`
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: anonKey,
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ video_id: videoId }),
+    })
+    return { response }
+  } catch (err) {
+    return { networkError: (err as Error).message || 'Network error' }
+  }
+}
+
 export async function requestVideoAccess(videoId: string): Promise<VideoAccessResult> {
   // Pull the freshest session we can. getSession() will transparently refresh
   // an expired access_token if autoRefreshToken is enabled (default).
@@ -38,36 +67,34 @@ export async function requestVideoAccess(videoId: string): Promise<VideoAccessRe
   if (sessionError) {
     return { kind: 'error', message: sessionError.message }
   }
-  const session = sessionData.session
-  if (!session?.access_token) {
+  let accessToken = sessionData.session?.access_token
+  if (!accessToken) {
     return { kind: 'not_signed_in' }
   }
 
-  const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? ''
-  const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? ''
-  if (!supabaseUrl || !anonKey) {
-    return { kind: 'error', message: 'Supabase is not configured.' }
+  // First attempt
+  let attempt = await postGetVideoAccess(videoId, accessToken)
+  if ('networkError' in attempt) {
+    return { kind: 'error', message: attempt.networkError }
   }
 
-  const url = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/get-video-access`
-
-  let response: Response
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // apikey is required by Supabase's gateway; Authorization carries the
-        // user's access_token so verify_jwt=true receives a real user JWT.
-        apikey: anonKey,
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ video_id: videoId }),
-    })
-  } catch (err) {
-    return { kind: 'error', message: (err as Error).message || 'Network error' }
+  // On 401, the token may have just gone stale between getSession() and this
+  // POST (tiny window, but real). Force a refresh and retry once before
+  // giving up — that way a signed-in user who hits a transient auth blip
+  // doesn't get kicked back to a sign-in prompt.
+  if (attempt.response.status === 401) {
+    const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession()
+    if (!refreshErr && refreshed.session?.access_token && refreshed.session.access_token !== accessToken) {
+      accessToken = refreshed.session.access_token
+      const retry = await postGetVideoAccess(videoId, accessToken)
+      if ('networkError' in retry) {
+        return { kind: 'error', message: retry.networkError }
+      }
+      attempt = retry
+    }
   }
 
+  const response = attempt.response
   let payload: { error?: string; video_url?: string; views_used?: number; views_remaining?: number } = {}
   try {
     payload = await response.json()
@@ -76,12 +103,21 @@ export async function requestVideoAccess(videoId: string): Promise<VideoAccessRe
   }
 
   if (!response.ok) {
-    if (response.status === 401 || payload.error === 'not_signed_in') {
-      return { kind: 'not_signed_in' }
-    }
     if (payload.error === 'not_purchased') return { kind: 'not_purchased' }
     if (payload.error === 'view_limit_reached') {
       return { kind: 'view_limit_reached', views_used: payload.views_used }
+    }
+    // Note: we intentionally do NOT return { kind: 'not_signed_in' } on 401
+    // anymore. The caller is already rendering a signed-in view (Library
+    // only mounts the watch button when auth.user exists), so kicking the
+    // user back to a sign-in modal after a transient 401 just forces
+    // pointless re-auth loops. Surface a retryable error instead.
+    if (response.status === 401 || payload.error === 'not_signed_in') {
+      return {
+        kind: 'error',
+        message:
+          "We couldn't verify your access just now. Please refresh the page and try again.",
+      }
     }
     return {
       kind: 'error',
