@@ -1,7 +1,14 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import {
+  clearCart,
+  getCart,
+  mirrorCartDeltaToServer,
+  subscribeToCart,
+  syncCartWithServer,
+} from './cart'
 
 interface AuthContextValue {
   session: Session | null
@@ -28,6 +35,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe()
   }, [])
 
+  // When a user signs in, reconcile their local cart with the server cart
+  // (union merge), then mirror any subsequent local mutations up. On
+  // sign-out we stop mirroring but leave local cart untouched so a user
+  // signing back in gets the same items.
+  const userId = session?.user?.id
+  // Track the last-mirrored snapshot so we can compute precise deltas on
+  // each subscribeToCart fire, avoiding full cart rewrites.
+  const prevCartRef = useRef<string[]>([])
+  // Gate on mirror writes so we can disable them during sign-out (we want
+  // to clear the local cart but NOT wipe the server cart — the server cart
+  // is the user's cross-device store and gets repopulated on next sign-in).
+  const mirrorEnabledRef = useRef(false)
+  useEffect(() => {
+    if (!userId) return
+    let cancelled = false
+    let unsubscribe: (() => void) | null = null
+
+    ;(async () => {
+      const merged = await syncCartWithServer(userId)
+      if (cancelled) return
+      prevCartRef.current = merged
+
+      // Only start mirroring AFTER the initial sync completes — otherwise
+      // the writeCart() inside syncCartWithServer would retrigger a server
+      // push of items we just pulled down.
+      mirrorEnabledRef.current = true
+      unsubscribe = subscribeToCart(() => {
+        if (!mirrorEnabledRef.current) return
+        const curr = getCart()
+        const prev = prevCartRef.current
+        prevCartRef.current = curr
+        // Fire and forget — errors surface via console.warn.
+        mirrorCartDeltaToServer(userId, prev, curr)
+      })
+    })()
+
+    return () => {
+      cancelled = true
+      mirrorEnabledRef.current = false
+      if (unsubscribe) unsubscribe()
+    }
+  }, [userId])
+
   const signInWithEmail: AuthContextValue['signInWithEmail'] = async (email) => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -39,6 +89,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
+    // Disable the server mirror BEFORE clearing the cart, so the clear
+    // affects only localStorage. Server cart is kept intact — when this
+    // user signs back in, syncCartWithServer pulls it down again.
+    mirrorEnabledRef.current = false
+    clearCart()
     await supabase.auth.signOut()
   }
 
