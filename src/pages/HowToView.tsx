@@ -83,20 +83,19 @@ export default function HowToView() {
   const currentStep = steps[activeSection]
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-16">
-      {/* Learn about Primrose */}
-      <div className="mb-8">
-        <Link to="/about" className="inline-flex items-center gap-2 text-4xl font-bold text-gradient-violet transition-colors hover:text-purple-800">
-          Learn more about Primrose <span>→</span>
-        </Link>
-      </div>
-
+    <div className="mx-auto max-w-6xl px-4 py-12 sm:py-16">
       {/* Header */}
-      <div className="mb-12">
-        <h1 className="mb-4 text-4xl font-bold text-royal-700">How to View</h1>
-        <p className="text-lg text-gray-600">
+      <div className="mb-8 sm:mb-12">
+        <h1 className="mb-4 text-3xl font-bold text-royal-700 sm:text-4xl">How to View</h1>
+        <p className="text-base text-gray-600 sm:text-lg">
           A complete guide to selecting, purchasing, and enjoying Primrose Watson's knowledge videos.
         </p>
+        <Link
+          to="/about"
+          className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-gradient-violet transition-colors hover:text-purple-800"
+        >
+          Learn more about Primrose Watson <span aria-hidden="true">→</span>
+        </Link>
       </div>
 
       {/* Step Selector */}
