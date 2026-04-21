@@ -1,6 +1,11 @@
 // supabase/functions/stripe-webhook/index.ts
-// Receives Stripe webhook events and records completed purchases.
+// Receives Stripe webhook events and records / reverses purchases.
 // Registered in Stripe Dashboard → Developers → Webhooks.
+//
+// Handles:
+//   checkout.session.completed — insert purchases rows for each video in the session
+//   charge.refunded            — stamp refunded_at on the matching purchases rows so
+//                                get-video-access immediately denies playback
 
 import Stripe from 'npm:stripe@^17'
 import { createClient } from 'npm:@supabase/supabase-js@^2'
@@ -84,6 +89,40 @@ Deno.serve(async (req) => {
     }
 
     console.log(`Recorded ${rows.length} purchase(s) for ${email} — total $${amountTotal}`)
+  }
+
+  if (event.type === 'charge.refunded') {
+    const charge = event.data.object as Stripe.Charge
+    const paymentIntentId =
+      typeof charge.payment_intent === 'string'
+        ? charge.payment_intent
+        : charge.payment_intent?.id ?? null
+
+    if (!paymentIntentId) {
+      console.warn('charge.refunded received with no payment_intent; ignoring:', charge.id)
+      return new Response(JSON.stringify({ received: true }), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Stamp refunded_at on any purchases tied to this payment intent.
+    // get-video-access filters on refunded_at IS NULL, so this revokes playback immediately.
+    const refundedAt = new Date().toISOString()
+    const { data: updated, error: updErr } = await supabase
+      .from('purchases')
+      .update({ refunded_at: refundedAt })
+      .eq('stripe_payment_intent_id', paymentIntentId)
+      .is('refunded_at', null)
+      .select('id, video_id, email')
+
+    if (updErr) {
+      console.error('Failed to mark purchases refunded:', updErr)
+      return new Response('DB error', { status: 500 })
+    }
+
+    console.log(
+      `Refunded ${updated?.length ?? 0} purchase row(s) for payment_intent=${paymentIntentId}`,
+    )
   }
 
   return new Response(JSON.stringify({ received: true }), {
