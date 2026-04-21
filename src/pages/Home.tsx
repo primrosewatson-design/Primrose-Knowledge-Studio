@@ -141,9 +141,11 @@ export default function Home() {
               {/* Description */}
               <p className="mb-4 text-gray-700">{feature.description}</p>
 
-              {/* Arrow indicator */}
-              <div className="inline-flex items-center gap-2 font-semibold text-gradient-coral transition-transform group-hover:translate-x-2">
-                Explore <span>→</span>
+              {/* Arrow indicator — rose-700 picked over the coral gradient token
+                  because the latter (#f43f5e) only hits ~3.3:1 on the pastel
+                  card backgrounds, failing WCAG AA for normal text. */}
+              <div className="inline-flex items-center gap-2 font-semibold text-rose-700 transition-transform group-hover:translate-x-2">
+                Explore <span aria-hidden="true">→</span>
               </div>
             </Link>
           ))}

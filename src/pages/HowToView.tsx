@@ -92,7 +92,7 @@ export default function HowToView() {
         </p>
         <Link
           to="/about"
-          className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-gradient-violet transition-colors hover:text-purple-800"
+          className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-purple-700 transition-colors hover:text-purple-800"
         >
           Learn more about Primrose Watson <span aria-hidden="true">→</span>
         </Link>
@@ -107,15 +107,21 @@ export default function HowToView() {
             <button
               key={section}
               onClick={() => setActiveSection(section)}
+              aria-pressed={isActive}
+              aria-label={stepData.title}
               className={`rounded-lg p-6 text-left transition-all ${
                 isActive
                   ? 'bg-royal-600 text-white shadow-lg'
                   : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
               }`}
             >
-              <div className="mb-2 text-3xl">{stepData.icon}</div>
-              <h3 className="font-bold">{stepData.title.split(':')[1]?.trim() || stepData.title}</h3>
-              <p className={`mt-2 text-sm ${isActive ? 'text-white/80' : 'text-gray-600'}`}>
+              <div className="mb-2 text-3xl" aria-hidden="true">{stepData.icon}</div>
+              {/* Visual "heading" — kept as a div to preserve heading hierarchy
+                  (h1 → h2 active step → h3 detail). The full step title lives
+                  in aria-label on the button, so screen reader users hear
+                  "Select Your Videos, step 1 of 3" etc. */}
+              <div className="font-bold">{stepData.title.split(':')[1]?.trim() || stepData.title}</div>
+              <p className={`mt-2 text-sm ${isActive ? 'text-white' : 'text-gray-600'}`}>
                 {stepData.description}
               </p>
             </button>
@@ -137,7 +143,7 @@ export default function HowToView() {
         <div className="space-y-6">
           {currentStep.details.map((detail, index) => (
             <div key={index} className="border-l-4 border-royal-600 pl-6 py-2">
-              <h4 className="font-bold text-gray-900">{detail.title}</h4>
+              <h3 className="font-bold text-gray-900">{detail.title}</h3>
               <p className="mt-2 text-gray-700">{detail.description}</p>
             </div>
           ))}
@@ -146,18 +152,18 @@ export default function HowToView() {
 
       {/* FAQ Section */}
       <div className="mt-16">
-        <h3 className="mb-8 text-2xl font-bold text-gray-900">Frequently Asked Questions</h3>
+        <h2 className="mb-8 text-2xl font-bold text-gray-900">Frequently Asked Questions</h2>
         <div className="space-y-4">
           <div className="rounded-lg bg-gray-50 p-6">
-            <h4 className="font-semibold text-gray-900">Can I watch videos on multiple devices?</h4>
+            <h3 className="font-semibold text-gray-900">Can I watch videos on multiple devices?</h3>
             <p className="mt-2 text-gray-700">Yes! Once purchased, you can access your videos from any device by logging into your account—desktop, tablet, or smartphone.</p>
           </div>
           <div className="rounded-lg bg-gray-50 p-6">
-            <h4 className="font-semibold text-gray-900">How many times can I watch a video?</h4>
+            <h3 className="font-semibold text-gray-900">How many times can I watch a video?</h3>
             <p className="mt-2 text-gray-700">You can watch each purchased video up to 5 times. This allows you to review the content while keeping costs low for everyone.</p>
           </div>
           <div className="rounded-lg bg-gray-50 p-6">
-            <h4 className="font-semibold text-gray-900">What if I have technical issues?</h4>
+            <h3 className="font-semibold text-gray-900">What if I have technical issues?</h3>
             <p className="mt-2 text-gray-700">Our support team is here to help! Contact us at support@primroseknowledgestudio.com for any playback issues or account questions.</p>
           </div>
         </div>
@@ -165,7 +171,7 @@ export default function HowToView() {
 
       {/* CTA */}
       <div className="mt-16 rounded-lg bg-gradient-to-r from-royal-600 to-royal-700 p-8 text-center text-white">
-        <h3 className="mb-4 text-2xl font-bold">Ready to Start Learning?</h3>
+        <h2 className="mb-4 text-2xl font-bold">Ready to Start Learning?</h2>
         <p className="mb-6 text-lg">Explore the video library and find the perfect content for your learning goals.</p>
         <Link
           to="/how-to-choose"

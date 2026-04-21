@@ -97,7 +97,15 @@ export default function HowToGet() {
                 {cartItems.map((item) => (
                   <div key={item.id} className="flex items-center gap-4 border-b border-gray-200 pb-4 last:border-b-0">
                     {item.thumbnail && (
-                      <img src={item.thumbnail} alt={item.title} className="h-16 w-24 rounded object-cover" />
+                      <img
+                        src={item.thumbnail}
+                        alt={item.title}
+                        loading="lazy"
+                        decoding="async"
+                        width="96"
+                        height="64"
+                        className="h-16 w-24 rounded object-cover"
+                      />
                     )}
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900">{item.title}</h3>
