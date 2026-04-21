@@ -1,6 +1,8 @@
 // supabase/functions/create-checkout/index.ts
 // Creates a Stripe Checkout Session from a list of video IDs.
 // Called by the frontend when the user clicks "Proceed to Checkout".
+// verify_jwt=true on this function, so the caller must pass a Supabase auth JWT
+// (signed-in user session, or the anon JWT for guest checkouts).
 
 import Stripe from 'npm:stripe@^17'
 import { createClient } from 'npm:@supabase/supabase-js@^2'
@@ -23,6 +25,19 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
+
+    // Try to resolve signed-in user from the JWT. If anon JWT, .getUser returns no user.
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const jwt = authHeader.replace(/^Bearer\s+/i, '')
+    let signedInUserId: string | null = null
+    let signedInEmail: string | null = null
+    if (jwt) {
+      const { data } = await supabase.auth.getUser(jwt)
+      if (data?.user) {
+        signedInUserId = data.user.id
+        signedInEmail = data.user.email ?? null
+      }
+    }
 
     const { video_ids, origin } = await req.json()
 
@@ -65,9 +80,11 @@ Deno.serve(async (req) => {
       cancel_url: `${baseUrl}/checkout/cancel`,
       metadata: {
         video_ids: video_ids.join(','),
+        ...(signedInUserId ? { user_id: signedInUserId } : {}),
       },
-      // Collect email for the receipt + guest purchase record
-      customer_creation: 'if_required',
+      // Pre-fill the email if the user is signed in, so Stripe's receipt
+      // + our webhook both use the same address. Falls back to guest flow otherwise.
+      ...(signedInEmail ? { customer_email: signedInEmail } : { customer_creation: 'if_required' as const }),
       payment_method_types: ['card'],
     })
 
