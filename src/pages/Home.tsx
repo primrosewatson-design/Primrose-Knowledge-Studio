@@ -139,7 +139,7 @@ export default function Home() {
               </h3>
 
               {/* Description */}
-              <p className="mb-4 text-gray-700">{feature.description}</p>
+              <p className="mb-4 text-justify text-gray-700">{feature.description}</p>
 
               {/* Arrow indicator — rose-700 picked over the coral gradient token
                   because the latter (#f43f5e) only hits ~3.3:1 on the pastel
