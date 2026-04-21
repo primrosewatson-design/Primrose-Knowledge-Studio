@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { requestVideoAccess } from '../lib/videoAccess'
 import { useAuth } from '../lib/auth'
 import AuthModal from '../components/AuthModal'
 
@@ -110,90 +111,53 @@ export default function Library() {
 
   const watch = async (item: LibraryItem) => {
     setPlayer({ kind: 'loading', videoId: item.video_id })
-    try {
-      // Explicitly fetch the session so we always send the user's access_token.
-      // If we let functions.invoke() fall back to the client's default JWT, it
-      // can send the anon key when the in-memory session is null/stale — and
-      // the edge function rejects that with 401 ("missing sub claim"), since
-      // the anon JWT has role=anon and no `sub`. getSession() also triggers an
-      // auto-refresh if the current token is expired.
-      const { data: sessionData } = await supabase.auth.getSession()
-      const accessToken = sessionData.session?.access_token
-      if (!accessToken) {
-        setPlayer({ kind: 'idle' })
-        setAuthOpen(true)
-        return
-      }
+    const result = await requestVideoAccess(item.video_id)
 
-      const { data, error } = await supabase.functions.invoke('get-video-access', {
-        body: { video_id: item.video_id },
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
-      if (error) {
-        const ctx = (error as { context?: Response }).context
-        let payload: { error?: string; views_used?: number } = {}
-        let status = 0
-        if (ctx && typeof (ctx as Response).json === 'function') {
-          status = (ctx as Response).status ?? 0
-          try {
-            payload = await (ctx as Response).clone().json()
-          } catch {
-            /* ignore */
-          }
-        }
-        if (payload.error === 'view_limit_reached') {
-          // Bump the local views_used so the card immediately shows the correct state
-          setItems((prev) =>
-            prev.map((it) =>
-              it.video_id === item.video_id ? { ...it, views_used: MAX_VIEWS } : it,
-            ),
-          )
-          return setPlayer({ kind: 'view_limit', videoId: item.video_id, title: item.title })
-        }
-        if (status === 401 || payload.error === 'not_signed_in') {
-          // Session stale or missing on the server — prompt re-sign-in. Close
-          // the player modal so the auth modal isn't buried behind it.
-          setPlayer({ kind: 'idle' })
-          setAuthOpen(true)
-          return
-        }
-        return setPlayer({
-          kind: 'error',
-          videoId: item.video_id,
-          title: item.title,
-          message: payload.error || error.message,
-        })
-      }
-      if (!data?.video_url) {
-        return setPlayer({
-          kind: 'error',
-          videoId: item.video_id,
-          title: item.title,
-          message: 'No video URL returned',
-        })
-      }
-      // Update local views_used so the card reflects the just-used view
+    if (result.kind === 'ok') {
+      // Reflect the freshly-used view on the card before opening the player.
       setItems((prev) =>
         prev.map((it) =>
-          it.video_id === item.video_id ? { ...it, views_used: data.views_used } : it,
+          it.video_id === item.video_id ? { ...it, views_used: result.views_used } : it,
         ),
       )
       setPlayer({
         kind: 'playing',
         videoId: item.video_id,
         title: item.title,
-        url: data.video_url,
-        views_used: data.views_used,
-        views_remaining: data.views_remaining,
+        url: result.video_url,
+        views_used: result.views_used,
+        views_remaining: result.views_remaining,
       })
-    } catch (err) {
-      setPlayer({
-        kind: 'error',
-        videoId: item.video_id,
-        title: item.title,
-        message: (err as Error).message,
-      })
+      return
     }
+
+    if (result.kind === 'view_limit_reached') {
+      setItems((prev) =>
+        prev.map((it) =>
+          it.video_id === item.video_id ? { ...it, views_used: MAX_VIEWS } : it,
+        ),
+      )
+      setPlayer({ kind: 'view_limit', videoId: item.video_id, title: item.title })
+      return
+    }
+
+    if (result.kind === 'not_signed_in') {
+      // Session stale or missing — close the player and prompt a fresh sign-in.
+      setPlayer({ kind: 'idle' })
+      setAuthOpen(true)
+      return
+    }
+
+    // not_purchased / error — surface whatever the server told us.
+    setPlayer({
+      kind: 'error',
+      videoId: item.video_id,
+      title: item.title,
+      message:
+        result.kind === 'not_purchased'
+          ? "We couldn't find this purchase on your account. Please contact support."
+          : result.message,
+    })
   }
 
   const closePlayer = () => setPlayer({ kind: 'idle' })
