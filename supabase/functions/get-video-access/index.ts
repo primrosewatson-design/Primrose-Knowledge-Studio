@@ -70,10 +70,13 @@ Deno.serve(async (req) => {
   if (!video.video_url) return json(404, { error: 'video_not_available' })
 
   // Check purchase. Match by user_id OR email (covers pre-auth purchases).
+  // Refunded purchases (refunded_at IS NOT NULL) are excluded — charge.refunded
+  // webhook stamps that column, so playback is revoked the moment Stripe processes the refund.
   const { data: purchases, error: purchaseErr } = await admin
     .from('purchases')
-    .select('id, user_id, email')
+    .select('id, user_id, email, refunded_at')
     .eq('video_id', videoId)
+    .is('refunded_at', null)
     .or(`user_id.eq.${user.id},email.eq.${email}`)
   if (purchaseErr) return json(500, { error: 'internal' })
   if (!purchases || purchases.length === 0) return json(402, { error: 'not_purchased' })
