@@ -48,11 +48,10 @@ export default function MainLayout() {
         <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
           <Link
             to="/"
-            className="flex-shrink-0 text-base font-bold text-royal-500 sm:text-xl"
+            className="flex-shrink-0 text-sm font-bold text-royal-500 sm:text-xl"
             aria-label="Primrose Knowledge Studio home"
           >
-            <span className="sm:hidden">Primrose Studio</span>
-            <span className="hidden sm:inline">Primrose Knowledge Studio</span>
+            Primrose Knowledge Studio
           </Link>
 
           <ul className="hidden gap-6 md:flex">

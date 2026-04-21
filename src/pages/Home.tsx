@@ -49,7 +49,7 @@ export default function Home() {
   return (
     <div className="overflow-hidden">
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-gradient-indigo to-gradient-violet px-4 py-24 text-center text-white md:py-32">
+      <section className="relative bg-gradient-to-br from-gradient-indigo to-gradient-violet px-4 py-16 text-center text-white md:py-24 lg:py-32">
         {/* Animated background elements */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-10 left-5 h-32 w-32 rounded-full bg-white/5 blur-3xl"></div>
@@ -101,9 +101,9 @@ export default function Home() {
       </section>
 
       {/* Feature Cards Section */}
-      <section className="mx-auto max-w-6xl px-4 py-16">
+      <section className="mx-auto max-w-6xl px-4 py-10 md:py-16">
         <h2 className="mb-4 text-center text-3xl font-bold text-gray-900">Get Started in 3 Steps</h2>
-        <p className="mx-auto mb-12 max-w-2xl text-center text-gray-600">
+        <p className="mx-auto mb-8 max-w-2xl text-center text-gray-600 md:mb-12">
           A simple process to find, purchase, and enjoy Primrose Watson's content
         </p>
 
@@ -137,8 +137,8 @@ export default function Home() {
       </section>
 
       {/* Features Highlight */}
-      <section className="mx-auto max-w-6xl px-4 py-16">
-        <h2 className="mb-12 text-center text-3xl font-bold text-gray-900">Why Choose Primrose Knowledge Studio?</h2>
+      <section className="mx-auto max-w-6xl px-4 py-10 md:py-16">
+        <h2 className="mb-8 text-center text-3xl font-bold text-gray-900 md:mb-12">Why Choose Primrose Knowledge Studio?</h2>
         <div className="grid gap-6 md:grid-cols-2">
           <div className="flex gap-4 rounded-lg bg-blue-50 p-6">
             <span className="text-2xl">🎓</span>
@@ -165,8 +165,8 @@ export default function Home() {
       </section>
 
       {/* Testimonials Section */}
-      <section className="mx-auto max-w-6xl px-4 py-16">
-        <h2 className="mb-12 text-center text-3xl font-bold text-gray-900">What Viewers Say</h2>
+      <section className="mx-auto max-w-6xl px-4 py-10 md:py-16">
+        <h2 className="mb-8 text-center text-3xl font-bold text-gray-900 md:mb-12">What Viewers Say</h2>
         <div className="grid gap-6 md:grid-cols-3">
           {testimonials.map((testimonial, idx) => (
             <div key={idx} className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -179,10 +179,10 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="mx-auto max-w-4xl px-4 py-16">
-        <div className="rounded-xl bg-gradient-to-r from-gradient-coral to-gradient-amber p-12 text-center text-white">
-          <h2 className="mb-4 text-3xl font-bold">Ready to Transform Your Learning?</h2>
-          <p className="mb-8 text-lg text-royal-100">
+      <section className="mx-auto max-w-4xl px-4 py-10 md:py-16">
+        <div className="rounded-xl bg-gradient-to-r from-gradient-coral to-gradient-amber p-8 text-center text-white md:p-12">
+          <h2 className="mb-4 text-2xl font-bold md:text-3xl">Ready to Transform Your Learning?</h2>
+          <p className="mb-8 text-base text-royal-100 md:text-lg">
             Start exploring Primrose Watson's curated video collection today
           </p>
           <Link
