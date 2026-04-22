@@ -28,6 +28,23 @@ function json(status: number, body: Record<string, unknown>) {
   })
 }
 
+// Decode a JWT's payload segment. We do NOT verify the signature here —
+// `verify_jwt=true` on the edge function gateway has already done that
+// before the request reaches this handler. We just need the `sub` + `email`
+// claims to identify the caller. Returns null if the token is malformed.
+function parseJwtPayload(jwt: string): Record<string, unknown> | null {
+  const parts = jwt.split('.')
+  if (parts.length !== 3) return null
+  try {
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4)
+    const payload = JSON.parse(atob(padded))
+    return typeof payload === 'object' && payload !== null ? payload : null
+  } catch {
+    return null
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' })
@@ -38,15 +55,24 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  // Pull the user from the JWT. verify_jwt=true already validated it.
+  // Pull the user from the JWT. verify_jwt=true already validated signature +
+  // expiry at the gateway, so we can trust the payload's `sub` / `email` claims
+  // directly instead of making an extra `admin.auth.getUser(jwt)` round-trip
+  // to GoTrue. The round-trip was the source of systematic 401s in production:
+  // transient GoTrue lookup failures (or edge-runtime networking hiccups)
+  // would return `userErr` for tokens the gateway had just happily validated,
+  // producing a blanket `not_signed_in` for signed-in users.
   const authHeader = req.headers.get('Authorization') ?? ''
   const jwt = authHeader.replace(/^Bearer\s+/i, '')
   if (!jwt) return json(401, { error: 'not_signed_in' })
 
-  const { data: userData, error: userErr } = await admin.auth.getUser(jwt)
-  if (userErr || !userData.user) return json(401, { error: 'not_signed_in' })
-  const user = userData.user
-  const email = (user.email || '').toLowerCase()
+  const claims = parseJwtPayload(jwt)
+  if (!claims || typeof claims.sub !== 'string' || !claims.sub) {
+    console.warn('get-video-access: rejected JWT — missing sub claim')
+    return json(401, { error: 'not_signed_in' })
+  }
+  const userId = claims.sub
+  const email = (typeof claims.email === 'string' ? claims.email : '').toLowerCase()
 
   // Parse body
   let body: { video_id?: unknown } = {}
@@ -82,7 +108,7 @@ Deno.serve(async (req) => {
     .select('id, user_id, email, refunded_at')
     .eq('video_id', videoId)
     .is('refunded_at', null)
-    .or(`user_id.eq.${user.id},email.eq.${email}`)
+    .or(`user_id.eq.${userId},email.eq.${email}`)
     .returns<PurchaseRow[]>()
   if (purchaseErr) return json(500, { error: 'internal' })
   if (!purchases || purchases.length === 0) return json(402, { error: 'not_purchased' })
@@ -92,14 +118,14 @@ Deno.serve(async (req) => {
     .filter((p) => !p.user_id && p.email && p.email.toLowerCase() === email)
     .map((p) => p.id)
   if (orphanIds.length > 0) {
-    await admin.from('purchases').update({ user_id: user.id }).in('id', orphanIds)
+    await admin.from('purchases').update({ user_id: userId }).in('id', orphanIds)
   }
 
   // Check / increment views for this (user, video).
   const { data: existingView } = await admin
     .from('video_views')
     .select('id, view_count')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('video_id', videoId)
     .maybeSingle()
 
@@ -121,7 +147,7 @@ Deno.serve(async (req) => {
     if (updErr) return json(500, { error: 'internal' })
   } else {
     const { error: insErr } = await admin.from('video_views').insert({
-      user_id: user.id,
+      user_id: userId,
       video_id: videoId,
       view_count: nextCount,
       last_viewed_at: new Date().toISOString(),
