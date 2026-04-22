@@ -22,7 +22,7 @@ create table if not exists purchases (
   unique(user_id, video_id)
 );
 
--- Video views table (track 5-view limit)
+-- Video views table (analytics only — no cap; purchasers get unlimited replays).
 create table if not exists video_views (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
@@ -32,10 +32,29 @@ create table if not exists video_views (
   unique(user_id, video_id)
 );
 
+-- Video gifts table: one single-use gift link per purchase. The edge functions
+-- `create-gift` and `redeem-gift` are the only things that mutate this table
+-- in production — they run as service_role and bypass RLS. The RLS policy
+-- below is defence-in-depth for the giver's own visibility.
+create table if not exists video_gifts (
+  id uuid primary key default gen_random_uuid(),
+  purchase_id uuid not null unique references purchases(id) on delete cascade,
+  giver_user_id uuid not null references auth.users(id) on delete cascade,
+  video_id uuid not null references videos(id) on delete cascade,
+  token text not null unique,
+  recipient_email text,
+  recipient_name text,
+  message text,
+  redeemed_at timestamptz,
+  redeemed_views integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
 -- Row level security
 alter table videos enable row level security;
 alter table purchases enable row level security;
 alter table video_views enable row level security;
+alter table video_gifts enable row level security;
 
 -- Videos: anyone can read
 create policy "Videos are public" on videos for select using (true);
@@ -56,6 +75,12 @@ create policy "Users upsert own views" on video_views for insert
 
 create policy "Users update own views" on video_views for update
   using (auth.uid() = user_id);
+
+-- Video gifts: giver can see their own rows. Redeem path goes through the
+-- service_role edge function and doesn't rely on RLS.
+create policy "Giver sees own gifts" on video_gifts for select
+  to authenticated
+  using (giver_user_id = (select auth.uid()));
 
 -- Seed some videos
 insert into videos (title, description, thumbnail, duration, category, video_url, price) values

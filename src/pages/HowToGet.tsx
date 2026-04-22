@@ -176,7 +176,7 @@ export default function HowToGet() {
               <span>📧</span> Access sent to your email
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-700">
-              <span>🎯</span> 5 views per purchased video
+              <span>🎁</span> One free gift link per purchase to share with a friend
             </div>
           </div>
         </div>

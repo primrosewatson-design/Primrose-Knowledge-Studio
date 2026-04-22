@@ -10,6 +10,7 @@ import CheckoutSuccess from './pages/CheckoutSuccess'
 import CheckoutCancel from './pages/CheckoutCancel'
 import AuthCallback from './pages/AuthCallback'
 import Library from './pages/Library'
+import GiftRedeem from './pages/GiftRedeem'
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="/how-to-pay" element={<HowToGet />} />
             <Route path="/about" element={<About />} />
             <Route path="/library" element={<Library />} />
+            <Route path="/gift/:token" element={<GiftRedeem />} />
             <Route path="/checkout/success" element={<CheckoutSuccess />} />
             <Route path="/checkout/cancel" element={<CheckoutCancel />} />
             <Route path="/auth/callback" element={<AuthCallback />} />

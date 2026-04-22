@@ -26,7 +26,7 @@ const features = [
 
 const stats = [
   { number: '50+', label: 'Videos' },
-  { number: '5', label: 'Views Per Video' },
+  { number: '1', label: 'Free Gift Per Video' },
   { number: '100%', label: 'Satisfaction' },
 ]
 
@@ -155,10 +155,10 @@ export default function Home() {
             </div>
           </div>
           <div className="flex gap-4 rounded-lg bg-royal-50 p-6">
-            <span className="text-2xl">🎯</span>
+            <span className="text-2xl">🎁</span>
             <div>
-              <h3 className="font-bold text-gray-900">5 Views Per Video</h3>
-              <p className="text-sm text-gray-700">Watch up to 5 times per purchased video</p>
+              <h3 className="font-bold text-gray-900">Gift a Friend</h3>
+              <p className="text-sm text-gray-700">Each purchase includes one free gift link to share</p>
             </div>
           </div>
         </div>

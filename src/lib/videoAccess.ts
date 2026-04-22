@@ -28,7 +28,6 @@ export type VideoAccessResult =
     }
   | { kind: 'not_signed_in' }
   | { kind: 'not_purchased' }
-  | { kind: 'view_limit_reached'; views_used?: number }
   | { kind: 'error'; message: string }
 
 // Single POST to the edge function. Returned as a tuple so the caller can
@@ -104,9 +103,6 @@ export async function requestVideoAccess(videoId: string): Promise<VideoAccessRe
 
   if (!response.ok) {
     if (payload.error === 'not_purchased') return { kind: 'not_purchased' }
-    if (payload.error === 'view_limit_reached') {
-      return { kind: 'view_limit_reached', views_used: payload.views_used }
-    }
     // Note: we intentionally do NOT return { kind: 'not_signed_in' } on 401
     // anymore. The caller is already rendering a signed-in view (Library
     // only mounts the watch button when auth.user exists), so kicking the
