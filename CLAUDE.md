@@ -21,22 +21,25 @@ Online video learning platform by Primrose Watson — Canadian lawyer and legal 
 | `/how-to-choose` | HowToChoose.tsx | Video gallery (live Supabase data) |
 | `/how-to-pay` | HowToGet.tsx | Shopping cart + Stripe checkout |
 | `/about` | About.tsx | Primrose Watson bio, credentials, headshot |
-| `/library` | Library.tsx | Auth-gated list of purchased videos with remaining views |
+| `/library` | Library.tsx | Auth-gated list of purchased videos — unlimited replays + one gift link per purchase |
 | `/auth/callback` | AuthCallback.tsx | Magic-link redirect target |
+| `/gift/:token` | GiftRedeem.tsx | Public single-use gift redemption page (no auth required) |
 
 **Layout:** MainLayout.tsx wraps all routes (header nav with conditional "My Library" link for signed-in users, footer with LinkedIn/Instagram).
 
 ## Components
 
-- **VideoGallery.tsx** — Fetches from Supabase `videos` table. Search, category filter, video cards with price, Preview button (free 30-second YouTube clip), modal player with iframe embed + view-counter wiring.
+- **VideoGallery.tsx** — Fetches from Supabase `videos` table. Search, category filter, video cards with price, Preview button (free 30-second YouTube clip), modal player with iframe embed. Purchasers get unlimited replays.
 - **AuthModal.tsx** — Magic-link sign-in modal. Sends one-time email via `supabase.auth.signInWithOtp`; user clicks link and lands on `/auth/callback`.
+- **GiftModal.tsx** — Lets a purchaser generate (or retrieve) the one gift link for a purchase. Optional recipient name/email/message. Displays the `/gift/:token` URL with copy-to-clipboard and redemption status. Idempotent — re-opening shows the same link.
 
 ## Database Schema (Supabase)
 
 - **videos** — id, title, description, thumbnail, duration, category, video_url, preview_youtube_id, price, stripe_price_id, created_at
 - **purchases** — id, user_id (FK auth.users), video_id (FK videos), email, amount_paid, stripe_session_id, refunded_at, created_at. Unique on (user_id, video_id)
-- **video_views** — id, user_id, video_id, view_count, last_viewed_at. Unique on (user_id, video_id). Tracks 5-view limit.
+- **video_views** — id, user_id, video_id, view_count, last_viewed_at. Unique on (user_id, video_id). Analytics only — no cap; purchasers get unlimited replays.
 - **cart_items** — user_id (FK auth.users), video_id (FK videos), added_at. Composite PK on (user_id, video_id). Cross-device cart persistence for signed-in users.
+- **video_gifts** — id, purchase_id (unique FK purchases), giver_user_id (FK auth.users), video_id (FK videos), token (unique), recipient_email, recipient_name, message, redeemed_at, redeemed_views, created_at. One gift link per purchase, single-use (1 view). RLS lets the giver see their own rows; the `create-gift` and `redeem-gift` edge functions run as service_role and bypass RLS for writes.
 - **RLS enabled** on all tables. Videos are public read (SELECT only for anon). Purchases/views/cart are scoped to `auth.uid()`. Purchases also allow SELECT when JWT email matches the row — so rows inserted pre-auth by the Stripe webhook still surface after sign-in.
 - **Purchases orphan-claim policy** — `"Users claim own email-matched purchases"` (UPDATE) lets a signed-in user attach their `user_id` to rows where `user_id IS NULL AND lower(email) = jwt_email`. WITH CHECK forces the new `user_id = auth.uid()`, so callers can only claim rows for themselves. This is what `AuthCallback.tsx` relies on when it backfills pre-auth purchases after a magic-link sign-in. Migration: `purchases_claim_orphan_by_email_policy`.
 - **Writes via Supabase MCP** — Anon key can't UPDATE/INSERT on videos. Use the Supabase MCP server (`mcp__*__execute_sql`, `apply_migration`) for any DDL/admin data changes, or the Supabase SQL Editor as a fallback.
@@ -50,17 +53,20 @@ Online video learning platform by Primrose Watson — Canadian lawyer and legal 
 
 - **create-checkout** — Creates a Stripe Checkout Session from cart `video_ids`. Redirects to `${SITE_URL}/how-to-pay?success=...`.
 - **stripe-webhook** — Handles `checkout.session.completed` (inserts `purchases` rows + sends Resend confirmation email) and `charge.refunded` (stamps `refunded_at`). `verify_jwt: false` so Stripe can hit it.
-- **get-video-access** — Auth-gated. Verifies the user has a non-refunded purchase for `video_id`, atomically bumps `video_views.view_count` (rejects at 5), and returns the `video_url`.
+- **get-video-access** — `verify_jwt: false` at the gateway; verifies the caller's JWT *inside* the function with `jose.jwtVerify()` (HS256 via `SUPABASE_JWT_SECRET`, JWKS fallback). Verifies the user has a non-refunded purchase for `video_id`, logs a view in `video_views` for analytics (no cap — unlimited replays for purchasers), and returns the `video_url`.
+- **create-gift** — Auth-gated via the same in-function JWT verification. Given a purchased `video_id`, idempotently creates the one allowed `video_gifts` row for that purchase and returns `{token, url, recipient_email, recipient_name, message, redeemed_at, redeemed_views, already_exists}`. Uses a 24-byte crypto-random hex token.
+- **redeem-gift** — Public (`verify_jwt: false`, no auth). Given a `{token}`, atomically marks the single-use gift as redeemed via an optimistic-concurrency UPDATE (`.eq('redeemed_views', 0)`) and returns `{video_url, video_title, recipient_name, message}`. If already redeemed, returns `{error: 'already_redeemed'}`.
 
 ## What Works vs. In Progress
 
 ### Working
 - Video gallery with live Supabase data, search, filtering, newest-first sort
 - Free Preview button per video (30s YouTube clip) + unlock CTA to cart
-- Video player modal (iframe embed) with 5-view enforcement via `get-video-access` edge function
+- Video player modal (iframe embed) with auth-gated access via `get-video-access` edge function (unlimited replays for purchasers)
 - First real video live: "Rent, Food, or Future?" with authentic YouTube thumbnail
 - Magic-link authentication (Supabase OTP) + `/auth/callback` handler + conditional "My Library" nav link
-- `/library` page — signed-in users see purchased videos with remaining views, watch button, view-limit modal
+- `/library` page — signed-in users see purchased videos with Watch button and "Gift to a friend" button
+- Gifting flow — one free gift link per purchase (`create-gift`), single-use public redemption page at `/gift/:token` (`redeem-gift`), idempotent generation with copy-to-clipboard UI (`GiftModal.tsx`)
 - Stripe live checkout via `create-checkout` edge function (real prices, session redirect)
 - Stripe webhook handling: purchases inserted on `checkout.session.completed`, `refunded_at` stamped on `charge.refunded`
 - Order confirmation email via Resend from the webhook (graceful degradation if keys not configured)
@@ -122,7 +128,7 @@ SITE_URL=https://primroseknowledgestudio.com  # optional
 
 - **Single creator** — All copy uses "Primrose Watson" (singular). Never "our team", "industry experts", or company-plural language.
 - **No "expert"** — Removed from all copy. Use "curated" or "knowledge" instead.
-- **No "lifetime access"** — Business model is 5 views per purchased video.
+- **Value model** — Each purchase grants the buyer **unlimited replays** of that video plus **one free single-use gift link** to share with a friend. Do not reintroduce the old "5 views per video" cap or "lifetime access" phrasing anywhere in copy, UI, or edge functions.
 - **No "money-back guarantee"** — Removed from all messaging.
 - **Link "Primrose Watson"** — Wherever her name appears in body text, link to `/about`.
 - **Colour palette** — Royal blue only. Dark blue and warm palettes were removed. Don't re-add them.
@@ -146,14 +152,16 @@ src/
   components/
     VideoGallery.tsx   # Video grid + Preview modal + live Supabase data
     AuthModal.tsx      # Magic-link sign-in modal
+    GiftModal.tsx      # Create/view the one gift link per purchase
   pages/
     Home.tsx           # Landing page
     HowToView.tsx      # Instructional guide
     HowToChoose.tsx    # Video gallery wrapper
     HowToGet.tsx       # Cart + Stripe checkout
     About.tsx          # Primrose Watson bio
-    Library.tsx        # Auth-gated purchased-video list
+    Library.tsx        # Auth-gated purchased-video list (watch + gift)
     AuthCallback.tsx   # Magic-link redirect handler
+    GiftRedeem.tsx     # Public /gift/:token single-use redemption page
 public/
   Headshot.jpg         # Profile photo
   favicon.svg
@@ -162,7 +170,9 @@ supabase/
   functions/
     create-checkout/index.ts   # Stripe Checkout Session
     stripe-webhook/index.ts    # checkout.session.completed + charge.refunded + Resend email
-    get-video-access/index.ts  # Auth-gated view unlock (5-view limit)
+    get-video-access/index.ts  # In-function JWT verify + unlimited-replay access
+    create-gift/index.ts       # Auth-gated: mint the one gift link per purchase
+    redeem-gift/index.ts       # Public: single-use gift redemption
 vercel.json            # SPA routing
 .mcp.json              # Supabase MCP config
 ```

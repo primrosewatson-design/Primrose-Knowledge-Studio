@@ -1,19 +1,27 @@
 // Edge Function: get-video-access
-// Deploy with verify_jwt=true — caller must send a valid Supabase Auth JWT.
+//
+// Deployed with verify_jwt=false at the gateway. We do the full JWT check
+// (signature + issuer + audience + expiry) inside the function using `jose`.
+// That split exists because the gateway-level verify_jwt=true was rejecting
+// otherwise-valid access tokens in production — shifting the check in-function
+// lets us log and respond consistently without relying on the opaque gateway.
 //
 // POST { video_id: string }
 // Returns:
 //   200 { video_url, views_used, views_remaining }   — access granted, view counted
 //   401 { error: "not_signed_in" }                   — no / invalid JWT
-//   402 { error: "not_purchased" }                    — signed in but hasn't bought this video
-//   403 { error: "view_limit_reached" }               — already watched 5 times
-//   400 { error: "bad_request" }                      — missing/invalid video_id
-//   404 { error: "video_not_found" }
+//   402 { error: "not_purchased" }                   — signed in but hasn't bought this video
+//   400 { error: "bad_request" }                     — missing/invalid video_id
+//   404 { error: "video_not_found" | "video_not_available" }
 //   500 { error: "internal" }
+//
+// Note: the 5-view cap has been removed. Purchasers now have unlimited views
+// on the original purchase; the single-share flow lives in the separate
+// `create-gift` / `redeem-gift` functions. We still bump `video_views.view_count`
+// for analytics (lets us see how often a given purchase is re-watched).
 
 import { createClient } from 'npm:@supabase/supabase-js@^2'
-
-const MAX_VIEWS = 5
+import * as jose from 'npm:jose@^5'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,21 +36,66 @@ function json(status: number, body: Record<string, unknown>) {
   })
 }
 
-// Decode a JWT's payload segment. We do NOT verify the signature here —
-// `verify_jwt=true` on the edge function gateway has already done that
-// before the request reaches this handler. We just need the `sub` + `email`
-// claims to identify the caller. Returns null if the token is malformed.
-function parseJwtPayload(jwt: string): Record<string, unknown> | null {
-  const parts = jwt.split('.')
-  if (parts.length !== 3) return null
-  try {
-    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
-    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4)
-    const payload = JSON.parse(atob(padded))
-    return typeof payload === 'object' && payload !== null ? payload : null
-  } catch {
-    return null
+// Cache the JWKS fetcher per cold-start. jose handles the internal key cache
+// + rotation; we just need to avoid re-creating the fetcher per request.
+let cachedJwks: ReturnType<typeof jose.createRemoteJWKSet> | null = null
+function getJwks(supabaseUrl: string) {
+  if (cachedJwks) return cachedJwks
+  cachedJwks = jose.createRemoteJWKSet(
+    new URL(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/.well-known/jwks.json`),
+  )
+  return cachedJwks
+}
+
+// Verify signature + claims on a Supabase access token. Strategy:
+//   1. HS256 via SUPABASE_JWT_SECRET — default/legacy signing mode, works for
+//      virtually every Supabase project.
+//   2. JWKS fallback (RS256/ES256) for projects using asymmetric signing.
+// Returns null on any failure — signature mismatch, wrong issuer/audience,
+// expired token, missing sub claim, malformed JWT, etc.
+async function verifyJwt(
+  jwt: string,
+  supabaseUrl: string,
+  hmacSecret: string | undefined,
+): Promise<{ sub: string; email: string } | null> {
+  const expectedIssuer = `${supabaseUrl.replace(/\/$/, '')}/auth/v1`
+  const expectedAudience = 'authenticated'
+
+  // 1) HS256
+  if (hmacSecret) {
+    try {
+      const key = new TextEncoder().encode(hmacSecret)
+      const { payload } = await jose.jwtVerify(jwt, key, {
+        issuer: expectedIssuer,
+        audience: expectedAudience,
+      })
+      if (typeof payload.sub === 'string' && payload.sub) {
+        const emailClaim = typeof payload.email === 'string' ? payload.email : ''
+        return { sub: payload.sub, email: emailClaim.toLowerCase() }
+      }
+    } catch (err) {
+      // Fall through to JWKS. A failed HS256 verify is expected for
+      // projects that opted into asymmetric signing.
+      console.log('get-video-access: HS256 verify failed, trying JWKS:', (err as Error).message)
+    }
   }
+
+  // 2) JWKS
+  try {
+    const jwks = getJwks(supabaseUrl)
+    const { payload } = await jose.jwtVerify(jwt, jwks, {
+      issuer: expectedIssuer,
+      audience: expectedAudience,
+    })
+    if (typeof payload.sub === 'string' && payload.sub) {
+      const emailClaim = typeof payload.email === 'string' ? payload.email : ''
+      return { sub: payload.sub, email: emailClaim.toLowerCase() }
+    }
+  } catch (err) {
+    console.warn('get-video-access: JWKS verify failed:', (err as Error).message)
+  }
+
+  return null
 }
 
 Deno.serve(async (req) => {
@@ -51,28 +104,19 @@ Deno.serve(async (req) => {
 
   const url = Deno.env.get('SUPABASE_URL')!
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const jwtSecret = Deno.env.get('SUPABASE_JWT_SECRET')
   const admin = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  // Pull the user from the JWT. verify_jwt=true already validated signature +
-  // expiry at the gateway, so we can trust the payload's `sub` / `email` claims
-  // directly instead of making an extra `admin.auth.getUser(jwt)` round-trip
-  // to GoTrue. The round-trip was the source of systematic 401s in production:
-  // transient GoTrue lookup failures (or edge-runtime networking hiccups)
-  // would return `userErr` for tokens the gateway had just happily validated,
-  // producing a blanket `not_signed_in` for signed-in users.
   const authHeader = req.headers.get('Authorization') ?? ''
   const jwt = authHeader.replace(/^Bearer\s+/i, '')
   if (!jwt) return json(401, { error: 'not_signed_in' })
 
-  const claims = parseJwtPayload(jwt)
-  if (!claims || typeof claims.sub !== 'string' || !claims.sub) {
-    console.warn('get-video-access: rejected JWT — missing sub claim')
-    return json(401, { error: 'not_signed_in' })
-  }
+  const claims = await verifyJwt(jwt, url, jwtSecret)
+  if (!claims) return json(401, { error: 'not_signed_in' })
   const userId = claims.sub
-  const email = (typeof claims.email === 'string' ? claims.email : '').toLowerCase()
+  const email = claims.email
 
   // Parse body
   let body: { video_id?: unknown } = {}
@@ -121,7 +165,7 @@ Deno.serve(async (req) => {
     await admin.from('purchases').update({ user_id: userId }).in('id', orphanIds)
   }
 
-  // Check / increment views for this (user, video).
+  // Track views for analytics — no cap, unlimited replays for purchasers.
   const { data: existingView } = await admin
     .from('video_views')
     .select('id, view_count')
@@ -130,15 +174,8 @@ Deno.serve(async (req) => {
     .maybeSingle()
 
   const currentCount = existingView?.view_count ?? 0
-  if (currentCount >= MAX_VIEWS) {
-    return json(403, {
-      error: 'view_limit_reached',
-      views_used: currentCount,
-      views_remaining: 0,
-    })
-  }
-
   const nextCount = currentCount + 1
+
   if (existingView) {
     const { error: updErr } = await admin
       .from('video_views')
@@ -155,9 +192,12 @@ Deno.serve(async (req) => {
     if (insErr) return json(500, { error: 'internal' })
   }
 
+  // views_remaining kept in the response shape for backwards-compat with the
+  // client wrapper, but the purchaser now has unlimited views — surface a
+  // large sentinel so the client never shows a "view limit reached" state.
   return json(200, {
     video_url: video.video_url,
     views_used: nextCount,
-    views_remaining: MAX_VIEWS - nextCount,
+    views_remaining: Number.MAX_SAFE_INTEGER,
   })
 })

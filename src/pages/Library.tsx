@@ -4,9 +4,12 @@ import { supabase } from '../lib/supabase'
 import { requestVideoAccess } from '../lib/videoAccess'
 import { useAuth } from '../lib/useAuth'
 import AuthModal from '../components/AuthModal'
+import GiftModal from '../components/GiftModal'
 
-// A row in the purchased-library list. `views_used` is best-effort — pulled
-// from video_views but falls back to 0 if the user has never actually watched.
+// A row in the purchased-library list. `views_used` is best-effort analytics —
+// how many times this purchaser has pressed Watch — pulled from video_views.
+// It no longer gates playback (the 5-view cap was removed when we switched to
+// "unlimited views + one gift link per purchase").
 interface LibraryItem {
   video_id: string
   purchased_at: string
@@ -21,11 +24,8 @@ interface LibraryItem {
 type PlayerState =
   | { kind: 'idle' }
   | { kind: 'loading'; videoId: string }
-  | { kind: 'playing'; videoId: string; title: string; url: string; views_used: number; views_remaining: number }
-  | { kind: 'view_limit'; videoId: string; title: string }
+  | { kind: 'playing'; videoId: string; title: string; url: string }
   | { kind: 'error'; videoId: string; title: string; message: string }
-
-const MAX_VIEWS = 5
 
 export default function Library() {
   const { user, loading: authLoading } = useAuth()
@@ -34,6 +34,7 @@ export default function Library() {
   const [error, setError] = useState<string | null>(null)
   const [authOpen, setAuthOpen] = useState(false)
   const [player, setPlayer] = useState<PlayerState>({ kind: 'idle' })
+  const [giftFor, setGiftFor] = useState<{ videoId: string; title: string } | null>(null)
 
   useEffect(() => {
     if (authLoading) return
@@ -125,29 +126,14 @@ export default function Library() {
         videoId: item.video_id,
         title: item.title,
         url: result.video_url,
-        views_used: result.views_used,
-        views_remaining: result.views_remaining,
       })
       return
     }
 
-    if (result.kind === 'view_limit_reached') {
-      setItems((prev) =>
-        prev.map((it) =>
-          it.video_id === item.video_id ? { ...it, views_used: MAX_VIEWS } : it,
-        ),
-      )
-      setPlayer({ kind: 'view_limit', videoId: item.video_id, title: item.title })
-      return
-    }
-
     if (result.kind === 'not_signed_in') {
-      // This branch should be unreachable for a user already in the Library
-      // view (we only render this page when auth.user exists, and
-      // videoAccess.ts now retries 401s with a refreshed session before
-      // giving up — see comments there). If we somehow land here anyway,
-      // show a retryable error rather than popping a re-auth modal that
-      // kicks a freshly-signed-in user back into the magic-link flow.
+      // Unreachable in practice — we only render this page when auth.user
+      // exists, and videoAccess.ts retries 401s with a refreshed session
+      // before giving up. Surface a retryable error if we somehow land here.
       setPlayer({
         kind: 'error',
         videoId: item.video_id,
@@ -256,7 +242,7 @@ export default function Library() {
             Nothing here yet
           </h2>
           <p className="mx-auto mb-6 max-w-md text-sm text-gray-700 sm:text-base">
-            Purchased videos will appear here with your remaining views. Browse the collection to pick
+            Purchased videos will appear here, ready to watch anytime. Browse the collection to pick
             your first video.
           </p>
           <Link
@@ -276,15 +262,14 @@ export default function Library() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-royal-700 sm:text-4xl">My Library</h1>
         <p className="mt-2 text-gray-600">
-          {sortedItems.length} {sortedItems.length === 1 ? 'video' : 'videos'} purchased. Each unlocks up
-          to 5 views from any device where you're signed in.
+          {sortedItems.length} {sortedItems.length === 1 ? 'video' : 'videos'} purchased. Watch as
+          many times as you like, and share one free gift link with a friend for each purchase.
         </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {sortedItems.map((item) => {
-          const viewsRemaining = Math.max(0, MAX_VIEWS - item.views_used)
-          const exhausted = viewsRemaining === 0
+          const isLoading = player.kind === 'loading' && player.videoId === item.video_id
           return (
             <div
               key={item.video_id}
@@ -323,29 +308,21 @@ export default function Library() {
                   </div>
                 )}
 
-                <div className="mb-4 flex items-center gap-2 text-sm">
-                  {exhausted ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-800">
-                      View limit reached
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 font-medium text-green-800">
-                      {viewsRemaining} {viewsRemaining === 1 ? 'view' : 'views'} remaining
-                    </span>
-                  )}
+                <div className="space-y-2">
+                  <button
+                    onClick={() => watch(item)}
+                    disabled={isLoading}
+                    className="w-full rounded-md bg-royal-600 py-2 text-center font-medium text-white transition-colors hover:bg-royal-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                  >
+                    {isLoading ? 'Loading…' : '▶ Watch'}
+                  </button>
+                  <button
+                    onClick={() => setGiftFor({ videoId: item.video_id, title: item.title })}
+                    className="w-full rounded-md border border-royal-600 bg-white py-2 text-center font-medium text-royal-700 transition-colors hover:bg-royal-50"
+                  >
+                    🎁 Gift to a friend
+                  </button>
                 </div>
-
-                <button
-                  onClick={() => watch(item)}
-                  disabled={exhausted || (player.kind === 'loading' && player.videoId === item.video_id)}
-                  className="w-full rounded-md bg-royal-600 py-2 text-center font-medium text-white transition-colors hover:bg-royal-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  {exhausted
-                    ? 'View limit reached'
-                    : player.kind === 'loading' && player.videoId === item.video_id
-                      ? 'Loading…'
-                      : `▶ Watch (${item.views_used + 1}/5)`}
-                </button>
               </div>
             </div>
           )
@@ -361,11 +338,6 @@ export default function Library() {
                 <h2 className="truncate text-lg font-bold text-gray-900 sm:text-2xl">
                   {'title' in player ? player.title : 'Loading…'}
                 </h2>
-                {player.kind === 'playing' && (
-                  <p className="mt-1 text-xs font-medium text-green-700 sm:text-sm">
-                    View {player.views_used} of 5 ({player.views_remaining} remaining)
-                  </p>
-                )}
               </div>
               <button
                 onClick={closePlayer}
@@ -401,20 +373,6 @@ export default function Library() {
               </div>
             )}
 
-            {player.kind === 'view_limit' && (
-              <div className="bg-gray-50 p-6 text-center sm:p-10">
-                <div className="mb-3 text-5xl" aria-hidden="true">🎬</div>
-                <h3 className="mb-2 text-xl font-bold text-gray-900">View limit reached</h3>
-                <p className="mx-auto max-w-md text-gray-700">
-                  You've watched this video 5 times — the maximum for a single purchase. Contact{' '}
-                  <a href="mailto:primrosewatson@gmail.com" className="text-royal-700 underline">
-                    primrosewatson@gmail.com
-                  </a>{' '}
-                  if you'd like to keep watching.
-                </p>
-              </div>
-            )}
-
             {player.kind === 'error' && (
               <div className="bg-gray-50 p-6 text-center sm:p-10">
                 <div className="mb-3 text-5xl" aria-hidden="true">⚠️</div>
@@ -433,6 +391,15 @@ export default function Library() {
             </div>
           </div>
         </div>
+      )}
+
+      {giftFor && (
+        <GiftModal
+          open={!!giftFor}
+          onClose={() => setGiftFor(null)}
+          videoId={giftFor.videoId}
+          videoTitle={giftFor.title}
+        />
       )}
     </div>
   )

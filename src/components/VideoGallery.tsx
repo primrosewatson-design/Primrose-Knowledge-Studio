@@ -23,10 +23,9 @@ interface Video {
 type FullAccess =
   | { kind: 'idle' }          // preview playing, user hasn't asked for full yet
   | { kind: 'loading' }       // unlock call in flight
-  | { kind: 'playing'; url: string; views_used: number; views_remaining: number }
+  | { kind: 'playing'; url: string }
   | { kind: 'needs_signin' }
   | { kind: 'not_purchased' }
-  | { kind: 'view_limit' }
   | { kind: 'error'; message: string }
 
 // YouTube embed params for the preview. `end=180` caps playback at 3 minutes;
@@ -98,21 +97,13 @@ export default function VideoGallery() {
     const result = await requestVideoAccess(selectedVideo.id)
     switch (result.kind) {
       case 'ok':
-        setFullAccess({
-          kind: 'playing',
-          url: result.video_url,
-          views_used: result.views_used,
-          views_remaining: result.views_remaining,
-        })
+        setFullAccess({ kind: 'playing', url: result.video_url })
         return
       case 'not_signed_in':
         setFullAccess({ kind: 'needs_signin' })
         return
       case 'not_purchased':
         setFullAccess({ kind: 'not_purchased' })
-        return
-      case 'view_limit_reached':
-        setFullAccess({ kind: 'view_limit' })
         return
       case 'error':
         setFullAccess({ kind: 'error', message: result.message })
@@ -282,7 +273,7 @@ export default function VideoGallery() {
                 )}
                 {fullAccess.kind === 'playing' && (
                   <p className="mt-1 text-xs font-medium text-green-700 sm:text-sm">
-                    ✓ Full video — view {fullAccess.views_used} of 5 ({fullAccess.views_remaining} remaining)
+                    ✓ Full video unlocked
                   </p>
                 )}
               </div>
@@ -329,7 +320,8 @@ export default function VideoGallery() {
                       Enjoying the preview?
                     </h3>
                     <p className="mt-0.5 text-sm text-gray-600">
-                      Unlock the full {selectedVideo.duration} video — 5 views included.
+                      Unlock the full {selectedVideo.duration} video — watch it anytime, plus one
+                      free gift link for a friend.
                     </p>
                   </div>
                   <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -396,8 +388,8 @@ export default function VideoGallery() {
                     Get the full video
                   </h3>
                   <p className="mt-1 text-sm text-gray-600">
-                    This video is ${selectedVideo.price}. Each purchase unlocks up to 5 views from any
-                    device you sign in on.
+                    This video is ${selectedVideo.price}. Watch anytime from any device you sign in
+                    on, and share one free gift link with a friend.
                   </p>
                   <div className="mt-3">
                     {cartIds.includes(selectedVideo.id) ? (
@@ -419,19 +411,6 @@ export default function VideoGallery() {
                 </div>
               )}
 
-              {fullAccess.kind === 'view_limit' && (
-                <div className="text-center sm:text-left">
-                  <h3 className="text-base font-semibold text-gray-900 sm:text-lg">View limit reached</h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    You've watched this video 5 times — the maximum for a single purchase. Contact{' '}
-                    <a href="mailto:primrosewatson@gmail.com" className="text-royal-700 underline">
-                      primrosewatson@gmail.com
-                    </a>{' '}
-                    if you'd like to keep watching.
-                  </p>
-                </div>
-              )}
-
               {fullAccess.kind === 'error' && (
                 <div className="text-center sm:text-left">
                   <h3 className="text-base font-semibold text-gray-900 sm:text-lg">Something went wrong</h3>
@@ -441,7 +420,12 @@ export default function VideoGallery() {
 
               {fullAccess.kind === 'playing' && (
                 <p className="text-sm text-gray-600">
-                  You're watching the full video. Playback is counted toward your 5-view limit.
+                  You're watching the full video. Manage your library (including your free gift
+                  link) at{' '}
+                  <Link to="/library" className="text-royal-700 underline">
+                    My Library
+                  </Link>
+                  .
                 </p>
               )}
             </div>
