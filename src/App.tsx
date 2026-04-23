@@ -11,6 +11,7 @@ import CheckoutCancel from './pages/CheckoutCancel'
 import AuthCallback from './pages/AuthCallback'
 import Library from './pages/Library'
 import GiftRedeem from './pages/GiftRedeem'
+import CodeRedeem from './pages/CodeRedeem'
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/about" element={<About />} />
             <Route path="/library" element={<Library />} />
             <Route path="/gift/:token" element={<GiftRedeem />} />
+            <Route path="/code/:code" element={<CodeRedeem />} />
             <Route path="/checkout/success" element={<CheckoutSuccess />} />
             <Route path="/checkout/cancel" element={<CheckoutCancel />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
