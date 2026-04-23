@@ -50,11 +50,51 @@ create table if not exists video_gifts (
   created_at timestamptz not null default now()
 );
 
+-- Access codes table: admin-issued reusable codes for free viewing. Redeemed
+-- anonymously via the `redeem-code` edge function (service_role, bypasses
+-- RLS). The `code` column is `citext` so lookups are case-insensitive while
+-- `%` and `_` stay literal — an earlier `.ilike(code, input)` version was
+-- LIKE-wildcard injectable. `note` is user-visible — it renders under the
+-- video title on the redemption page, so it's written as friendly viewer
+-- copy, not as an admin memo.
+create extension if not exists citext;
+create table if not exists access_codes (
+  id uuid primary key default gen_random_uuid(),
+  code citext not null unique,
+  video_id uuid not null references videos(id) on delete cascade,
+  note text,
+  redeemed_at timestamptz,
+  redeemed_views integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Atomic counter bump for access_codes. The edge function used to do a
+-- read-then-write on `redeemed_views`, which lost updates under concurrent
+-- redemptions. This RPC folds the increment into a single UPDATE. Locked
+-- down to service_role so the public anon key can never call it directly.
+create or replace function public.bump_access_code_usage(p_code_id uuid)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.access_codes
+     set redeemed_views = redeemed_views + 1,
+         redeemed_at    = now()
+   where id = p_code_id;
+$$;
+revoke all on function public.bump_access_code_usage(uuid) from public;
+revoke all on function public.bump_access_code_usage(uuid) from anon, authenticated;
+grant execute on function public.bump_access_code_usage(uuid) to service_role;
+
 -- Row level security
 alter table videos enable row level security;
 alter table purchases enable row level security;
 alter table video_views enable row level security;
 alter table video_gifts enable row level security;
+alter table access_codes enable row level security;
+-- No public policies on access_codes — all reads/writes go through the
+-- `redeem-code` edge function which runs as service_role.
 
 -- Videos: anyone can read
 create policy "Videos are public" on videos for select using (true);
